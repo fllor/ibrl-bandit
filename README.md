@@ -20,11 +20,11 @@ All agents use an ε-greedy policy to encourage exploration and optionally start
 Different conventions might be chosen for all agent types. Some conventions might lead to qualitatively different results.
 
 ## Results
-As a check of the implementation, the classical agent is tested on the classical multi-armed bandit problem. The implementation successfully reproduces figure 2.2 from Barto&Sutton[^1].
+As a check of the implementation, the classical agent is tested on the classical multi-armed bandit problem. The implementation successfully reproduces figure 2.2 from Barto&Sutton[^1] (10 arms, averaged over 2000 runs).
 <p align="center"><img src="bandit.classical.png"></p>
 The bayesian and infrabayesian agents behave similarly.
 
-Next, we apply the agents to Newcomb's problem. See, [classical](newcomb.classical.png), [bayesian](newcomb.classical.png) and [infrabayesian](newcomb.classical.png) plots. It is not easy to see on the plots, but the classical agents fail to converge to 1-boxing. They exhibit the following behaviour:
+Next, we apply the agents to Newcomb's problem. See, [classical](newcomb.classical.png), [bayesian](newcomb.bayesian.png) and [infrabayesian](newcomb.infrabayesian.png) plots. It is not easy to see on the plots, but the classical agents fail to converge to 1-boxing. They exhibit the following behaviour:
 1. They quickly learn the typical rewards: 1-boxing: reward 100; 2-boxing: reward 1. Based on this observation, they pick the 1-box policy.
 2. Due to the ε-greedy policy, they will occasionally explore and 2-box. The predictor does not expect this, so they receive reward 101.
 3. Every time this happens, the expected reward of 2-boxing slightly increases (asymptotically up to 101) and eventually it surpasses the reward 100 of 1-boxing.
