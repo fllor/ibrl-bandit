@@ -25,13 +25,17 @@ class PolicyDependentBanditEnvironment:
     """
     Like a multi-armed bandit, but the reward depends on the (prediction,action) pair, rather than just the action
     """
-    def __init__(self, k : int):
+    def __init__(self, k : int, sample : bool = True):
         self.num_arms = k
+        self.sample = sample
 
     def interact(self, action : int, prediction : int) -> float:
         assert action >= 0 and action < self.num_arms
         assert prediction >= 0 and prediction < self.num_arms
-        return np.random.normal(self.true_values[prediction][action], 1)
+        if self.sample:
+            return np.random.normal(self.true_values[prediction][action], 1)
+        else:
+            return self.true_values[prediction][action]
 
     def get_best_action(self) -> int:
         # Logically consistent actions are along the diagonal
@@ -52,7 +56,7 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
     Predicted 2-box & action 2-box -> reward 1
     """
     def __init__(self):
-        super().__init__(2)
+        super().__init__(2, False)
 
     def reset(self):
         self.true_values = np.array([

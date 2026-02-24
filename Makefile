@@ -21,21 +21,21 @@ outputs/bandit outputs/newcomb outputs/pdbandit: %:
 $(OUTPUTS_BANDIT_CLASSICAL): outputs/bandit/classical_%.txt: main.py | outputs/bandit
 	python3 -m main bandit classical $(OPTIONS_BANDIT) --epsilon $* > $@
 $(OUTPUTS_BANDIT_BAYESIAN): outputs/bandit/bayesian_%.txt: main.py | outputs/bandit
-	python3 -m main bandit bayes $(OPTIONS_BANDIT) --epsilon $* > $@
+	python3 -m main bandit bayesian $(OPTIONS_BANDIT) --epsilon $* > $@
 $(OUTPUTS_BANDIT_INFRABAYESIAN): outputs/bandit/infrabayesian_%.txt: main.py | outputs/bandit
-	python3 -m main bandit infrabayes $(OPTIONS_BANDIT) --epsilon $* --optimism 4 > $@
+	python3 -m main bandit infrabayesian $(OPTIONS_BANDIT) --epsilon $* --optimism 4 > $@
 $(OUTPUTS_NEWCOMB_CLASSICAL): outputs/newcomb/classical_%.txt: main.py | outputs/newcomb
 	python3 -m main newcomb classical $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_NEWCOMB_BAYESIAN): outputs/newcomb/bayesian_%.txt: main.py | outputs/newcomb
-	python3 -m main newcomb bayes $(OPTIONS_NEWCOMB) --epsilon $* > $@
+	python3 -m main newcomb bayesian $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_NEWCOMB_INFRABAYESIAN): outputs/newcomb/infrabayesian_%.txt: main.py | outputs/newcomb
-	python3 -m main newcomb infrabayes $(OPTIONS_NEWCOMB) --epsilon $* --optimism 200 > $@
+	python3 -m main newcomb infrabayesian $(OPTIONS_NEWCOMB) --epsilon $* --optimism 101 > $@
 $(OUTPUTS_PDBANDIT_CLASSICAL): outputs/pdbandit/classical_%.txt: main.py | outputs/pdbandit
 	python3 -m main pdbandit classical $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_PDBANDIT_BAYESIAN): outputs/pdbandit/bayesian_%.txt: main.py | outputs/pdbandit
-	python3 -m main pdbandit bayes $(OPTIONS_NEWCOMB) --epsilon $* > $@
+	python3 -m main pdbandit bayesian $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_PDBANDIT_INFRABAYESIAN): outputs/pdbandit/infrabayesian_%.txt: main.py | outputs/pdbandit
-	python3 -m main pdbandit infrabayes $(OPTIONS_NEWCOMB) --epsilon $* --optimism 4 > $@
+	python3 -m main pdbandit infrabayesian $(OPTIONS_NEWCOMB) --epsilon $* --optimism 4 > $@
 
 # Figure 2.2 from Barto&Sutton
 bandit.classical.png: plot.gp $(OUTPUTS_BANDIT_CLASSICAL)
