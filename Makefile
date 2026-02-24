@@ -10,12 +10,12 @@ OUTPUTS_NEWCOMB_INFRABAYESIAN=$(EPSILON:%=outputs/newcomb/infrabayesian_%.txt)
 OUTPUTS_PDBANDIT_CLASSICAL=$(EPSILON:%=outputs/pdbandit/classical_%.txt)
 OUTPUTS_PDBANDIT_BAYESIAN=$(EPSILON:%=outputs/pdbandit/bayesian_%.txt)
 OUTPUTS_PDBANDIT_INFRABAYESIAN=$(EPSILON:%=outputs/pdbandit/infrabayesian_%.txt)
-IMAGES=$(foreach AGENT,classical bayesian infrabayesian,$(foreach ENV,bandit newcomb pdbandit,$(ENV).$(AGENT).png))
+IMAGES=$(foreach AGENT,classical bayesian infrabayesian,$(foreach ENV,bandit newcomb pdbandit,figures/$(ENV).$(AGENT).png))
 
 all: $(IMAGES)
 .PHONY: all
 
-outputs/bandit outputs/newcomb outputs/pdbandit: %:
+outputs/bandit outputs/newcomb outputs/pdbandit figures: %:
 	mkdir -p $@
 
 $(OUTPUTS_BANDIT_CLASSICAL): outputs/bandit/classical_%.txt: main.py | outputs/bandit
@@ -38,26 +38,26 @@ $(OUTPUTS_PDBANDIT_INFRABAYESIAN): outputs/pdbandit/infrabayesian_%.txt: main.py
 	python3 -m main pdbandit infrabayesian $(OPTIONS_NEWCOMB) --epsilon $* --optimism 4 > $@
 
 # Figure 2.2 from Barto&Sutton
-bandit.classical.png: plot.gp $(OUTPUTS_BANDIT_CLASSICAL)
+figures/bandit.classical.png: plot.gp $(OUTPUTS_BANDIT_CLASSICAL) | figures
 	gnuplot -c $< bandit classical
-bandit.bayesian.png: plot.gp $(OUTPUTS_BANDIT_BAYESIAN)
+figures/bandit.bayesian.png: plot.gp $(OUTPUTS_BANDIT_BAYESIAN) | figures
 	gnuplot -c $< bandit bayesian
-bandit.infrabayesian.png: plot.gp $(OUTPUTS_BANDIT_INFRABAYESIAN)
+figures/bandit.infrabayesian.png: plot.gp $(OUTPUTS_BANDIT_INFRABAYESIAN) | figures
 	gnuplot -c $< bandit infrabayesian
-newcomb.classical.png: plot.gp $(OUTPUTS_NEWCOMB_CLASSICAL)
+figures/newcomb.classical.png: plot.gp $(OUTPUTS_NEWCOMB_CLASSICAL) | figures
 	gnuplot -c $< newcomb classical
-newcomb.bayesian.png: plot.gp $(OUTPUTS_NEWCOMB_BAYESIAN)
+figures/newcomb.bayesian.png: plot.gp $(OUTPUTS_NEWCOMB_BAYESIAN) | figures
 	gnuplot -c $< newcomb bayesian
-newcomb.infrabayesian.png: plot.gp $(OUTPUTS_NEWCOMB_INFRABAYESIAN)
+figures/newcomb.infrabayesian.png: plot.gp $(OUTPUTS_NEWCOMB_INFRABAYESIAN) | figures
 	gnuplot -c $< newcomb infrabayesian
-pdbandit.classical.png: plot.gp $(OUTPUTS_PDBANDIT_CLASSICAL)
+figures/pdbandit.classical.png: plot.gp $(OUTPUTS_PDBANDIT_CLASSICAL) | figures
 	gnuplot -c $< pdbandit classical
-pdbandit.bayesian.png: plot.gp $(OUTPUTS_PDBANDIT_BAYESIAN)
+figures/pdbandit.bayesian.png: plot.gp $(OUTPUTS_PDBANDIT_BAYESIAN) | figures
 	gnuplot -c $< pdbandit bayesian
-pdbandit.infrabayesian.png: plot.gp $(OUTPUTS_PDBANDIT_INFRABAYESIAN)
+figures/pdbandit.infrabayesian.png: plot.gp $(OUTPUTS_PDBANDIT_INFRABAYESIAN) | figures
 	gnuplot -c $< pdbandit infrabayesian
 
 .PHONY: clean
 clean:
-	rm -rf outputs $(IMAGES)
+	rm -rf outputs figures
 

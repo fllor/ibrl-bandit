@@ -21,10 +21,10 @@ Different conventions might be chosen for all agent types. Some conventions migh
 
 ## Results
 As a check of the implementation, the classical agent is tested on the classical multi-armed bandit problem. The implementation successfully reproduces figure 2.2 from Barto&Sutton[^1] (10 arms, averaged over 2000 runs).
-<p align="center"><img src="bandit.classical.png"></p>
+<p align="center"><img src="figures/bandit.classical.png"></p>
 The bayesian and infrabayesian agents behave similarly.
 
-Next, we apply the agents to Newcomb's problem. See, [classical](newcomb.classical.png), [bayesian](newcomb.bayesian.png) and [infrabayesian](newcomb.infrabayesian.png) plots. It is not easy to see on the plots, but the classical agents fail to converge to 1-boxing. They exhibit the following behaviour:
+Next, we apply the agents to Newcomb's problem. See, [classical](figures/newcomb.classical.png), [bayesian](figures/newcomb.bayesian.png) and [infrabayesian](figures/newcomb.infrabayesian.png) plots. It is not easy to see on the plots, but the classical agents fail to converge to 1-boxing. They exhibit the following behaviour:
 1. They quickly learn the typical rewards: 1-boxing: reward 100; 2-boxing: reward 1. Based on this observation, they pick the 1-box policy.
 2. Due to the ε-greedy policy, they will occasionally explore and 2-box. The predictor does not expect this, so they receive reward 101.
 3. Every time this happens, the expected reward of 2-boxing slightly increases (asymptotically up to 101) and eventually it surpasses the reward 100 of 1-boxing.
@@ -49,7 +49,7 @@ Worst-case       |          100 |            1
 
 In this case it finds that 1-boxing has a higher worst-case reward, so it adopts this policy. Thus, the agent converges to the optimal policy.
 Due to the ε-greedy policy, the agent still sometimes 2-boxes. This is not an issue as the actual policy has converged to 1-boxing and does not change from this. In this particular case, it is even helpful, as the predictor cannot expect this, so it still fills the second box and the agent receives reward 101. For ε=10%, the agent achieves an average reward of 100.05.
-<p align="center"><img src="newcomb.infrabayesian.png"></p>
+<p align="center"><img src="figures/newcomb.infrabayesian.png"></p>
 
 The policy-dependent bandit environment seems to yield similar results, but should be studied in more detail.
 

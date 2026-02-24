@@ -3,7 +3,7 @@ AGENT=ARG2
 
 
 set term pngcairo size 1280,1280 linewidth 3 fontscale 1.5;
-set output ENV.".".AGENT.".png";
+set output "figures/".ENV.".".AGENT.".png";
 set grid;
 set key box bottom right;
 
