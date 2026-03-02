@@ -96,39 +96,6 @@ class ClassicalAgent:
         self.values = np.ones((self.num_actions,))*self.optimism
         self.counts = np.zeros((self.num_actions,))
 
-class BayesianAgent:
-    """
-    Agent using Bayesian inference
-
-    For each action it estimates a normal distribution and the picks the action with the largest central value
-    Use epsilon-greedy policy to balance continuous exploration
-    Optionally start with optimism to encourage early exploration
-    """
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.sigma_true = 1 # assume standard deviation of reward sampling is known
-
-    def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
-        return self.values.argmax()
-
-    def get_greedy_action(self):
-        return self.values.argmax()
-
-    def update(self, action : int, reward : float, prediction = None):
-        # estimate reward of the action and its uncertainty based on observed reward and priors
-        # Formulae from https://slinderman.github.io/stats305c/notebooks/01_bayes_normal.html#normal-model-with-unknown-mean
-        tmp = 1/self.sigma[action]**2 + 1/self.sigma_true**2
-        self.values[action] = (self.values[action]/self.sigma[action]**2 + reward/self.sigma_true**2)/tmp
-        self.sigma[action] = 1/np.sqrt(tmp)
-
-    def reset(self):
-        self.values = np.ones((self.num_actions,))*self.optimism   # prior for rewards, will converge to true values
-        self.sigma = np.ones((self.num_actions,))*self.sigma_true  # uncertainty of rewards, will converge to 0
-
 class InfrabayesianAgent:
     def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
         self.num_actions = k
@@ -176,8 +143,6 @@ def main(options):
 
     if options.agent.startswith("classic"):
         agent = ClassicalAgent(options.arms, options.epsilon, options.optimism)
-    elif options.agent.startswith("bayes"):
-        agent = BayesianAgent(options.arms, options.epsilon, options.optimism)
     elif options.agent.startswith("infrabayes"):
         agent = InfrabayesianAgent(options.arms, options.epsilon, options.optimism)
     else:
