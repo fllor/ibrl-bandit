@@ -1,4 +1,5 @@
 import argparse
+import math
 import numpy as np
 
 class BanditEnvironment:
@@ -11,7 +12,7 @@ class BanditEnvironment:
     def __init__(self, k : int):
         self.num_arms = k
 
-    def interact(self, action : int, prediction = None) -> float:
+    def interact(self, action : int, policy = None) -> float:
         assert action >= 0 and action < self.num_arms
         return np.random.normal(self.true_values[action], 1)
 
@@ -21,28 +22,23 @@ class BanditEnvironment:
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
 
-
 class NewcombEnvironment:
     """
     Newcomb's problem
-    Two possible actions: 1-box or 2-box
-    The reward depends on the predicted action and actual action of the agent
 
-    Predicted 1-box & action 1-box -> reward 100
-    Predicted 1-box & action 2-box -> reward 101
-    Predicted 2-box & action 1-box -> reward 0
-    Predicted 2-box & action 2-box -> reward 1
+    Two actions:
+      one-box (0): take box B
+      two-box (1): take boxes A+B
+
+    Box A is always filled with a small reward. Box B is filled with a larger reward, only if the agent the agent is predicted to one-box.
     """
     def __init__(self):
-        self.true_values = np.array([
-            [100,101],
-            [0,1]
-        ])
+        self.boxA = 5   # guaranteed content of first box
+        self.boxB = 10  # conditional content of second box
 
-    def interact(self, action : int, prediction : int) -> float:
-        assert action >= 0 and action < 2
-        assert prediction >= 0 and prediction < 2
-        return self.true_values[prediction][action]
+    def interact(self, action : int, policy) -> float:
+        box_filled = np.random.binomial(1, policy[0])  # fill second box at one-boxing rate
+        return self.boxA*(action==1) + self.boxB*box_filled
 
     def get_best_action(self) -> int:
         return 0  # one-box
@@ -57,37 +53,31 @@ class QLearningAgent:
 
     Arguments:
         learning_rate:  Learning rate for Q-learning
-                        If None, use sample averages instead of Q-learning
-        epsilon:        Parameter for epsilon-greedy policy encourage exploration
-        optimism:       Initial Q-values to encourage early exploration
     """
-    def __init__(self, k : int, learning_rate : float = 0.1, epsilon : float = 0.1, optimism : float = 0):
+    def __init__(self, k : int, learning_rate : float = 0.1):
         self.num_actions = k
         self.learning_rate = learning_rate
-        self.epsilon = epsilon
-        self.optimism = optimism
 
-    def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
-        return self.values.argmax()
+    def get_policy(self):
+        self.step += 1
 
-    def get_greedy_action(self):
-        return self.values.argmax()
+        # Exploitation: randomly chose among the actions with highest value
+        best_actions = self.q == self.q.max()
+        exploit = np.ones((self.num_actions,))*best_actions / best_actions.sum()
+        
+        # Exploration: pick action uniformly
+        explore = np.ones((self.num_actions,))/self.num_actions
+
+        # epsilon-greedy policy with decaying epsilon
+        epsilon = max(0.01, 0.5 / math.sqrt(self.step))
+        return exploit * (1 - epsilon) + explore * epsilon
 
     def update(self, action : int, reward : float, prediction = None):
-        if self.learning_rate is None:
-            # Use sample average
-            self.counts[action] += 1
-            self.values[action] += (reward - self.values[action]) / self.counts[action]
-        else:
-            # Q-learning
-            self.values[action] += self.learning_rate * (reward - self.values[action])
+        self.q[action] += self.learning_rate * (reward - self.q[action])
 
     def reset(self):
-        if self.learning_rate is None:
-            self.counts = np.zeros((self.num_actions,))
-        self.values = np.ones((self.num_actions,))*self.optimism
+        self.q = np.zeros((self.num_actions,))
+        self.step = 0
 
 def main(options):
     np.random.seed(options.seed)
@@ -102,11 +92,12 @@ def main(options):
         raise RuntimeError("Invalid environment: " + options.environment)
 
     if options.agent.startswith("q"):
-        agent = QLearningAgent(options.arms, options.learning, options.epsilon, options.optimism)
+        agent = QLearningAgent(options.arms, options.learning_rate)
     else:
         raise RuntimeError("Invalid agent type: " + options.agent)
 
     average_reward = np.zeros((num_steps,))
+    average_reward_sq = np.zeros((num_steps,))
     best_action_freq = np.zeros((num_steps,))
     for r in range(num_runs):
         if options.verbose > 0:
@@ -115,32 +106,41 @@ def main(options):
         agent.reset()
         best_action = env.get_best_action()
         for i in range(num_steps):
-            action = agent.get_action()         # the actual action (might be random)
-            greedy = agent.get_greedy_action()  # most likely action (what would be predicted)
-            reward = env.interact(action, greedy)
-            agent.update(action, reward, greedy)
-            average_reward[i] += reward
-            best_action_freq[i] += int(action == best_action)
+            policy = agent.get_policy()
+            policy /= policy.sum() # for numerics
+            action = np.random.choice(len(policy), p=policy)
+            reward = env.interact(action, policy)
             if options.verbose > 0:
-                print(i, action, greedy, reward, agent.values.tolist())
+                print(i, action, reward, policy.tolist(), agent.q.tolist())
+            agent.update(action, reward, policy)
+            average_reward[i] += reward
+            average_reward_sq[i] += reward**2
+            best_action_freq[i] += int(action == best_action)
     average_reward /= num_runs
+    average_reward_sq /= num_runs
     best_action_freq /= num_runs
 
     for i in range(num_steps):
-        print(i, average_reward[i], best_action_freq[i])
+        print(
+            i,
+            average_reward[i],                                                          # Average reward
+            math.sqrt(average_reward_sq[i] - average_reward[i]**2)/math.sqrt(num_runs), # Uncertainty of reward (converges to 0 as num_runs goes to infinity)
+            math.sqrt(average_reward_sq[i] - average_reward[i]**2),                     # Spread of reward (converges to constant)
+            best_action_freq[i],                                                        # Rate at which optimal action is taken
+            math.sqrt(best_action_freq[i] - best_action_freq[i]**2)/math.sqrt(num_runs),# Uncertainty of optimal action rate
+            math.sqrt(best_action_freq[i] - best_action_freq[i]**2)                     # Spread of optimal action rate
+        )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RL test with multi-armed bandit")
-    parser.add_argument("environment",      help="Environment type",            type=str)
-    parser.add_argument("agent",            help="Agent type",                  type=str)
-    parser.add_argument("-k", "--arms",     help="Number of arms",              type=int,       default=10)
-    parser.add_argument("-l", "--learning", help="Learning rate",               type=float,     default=0.1)
-    parser.add_argument("-e", "--epsilon",  help="Parameter for exploration",   type=float,     default=0.1)
-    parser.add_argument("-o", "--optimism", help="Parameter for reward priors", type=float,     default=0.0)
-    parser.add_argument("-s", "--steps",    help="Number of steps per episode", type=int,       default=1000)
-    parser.add_argument("-r", "--runs",     help="Number of episodes to run",   type=int,       default=1)
-    parser.add_argument(      "--seed",     help="Random number seed",          type=int,       default=42)
-    parser.add_argument("-v", "--verbose",  help="Debug output",                action="count", default=0)
+    parser.add_argument("environment",          help="Environment type",            type=str)
+    parser.add_argument("agent",                help="Agent type",                  type=str)
+    parser.add_argument("-k", "--arms",         help="Number of arms",              type=int,       default=10)
+    parser.add_argument("-l", "--learning-rate",help="Learning rate",               type=float,     default=0.1)
+    parser.add_argument("-s", "--steps",        help="Number of steps per episode", type=int,       default=1001)
+    parser.add_argument("-r", "--runs",         help="Number of episodes to run",   type=int,       default=1)
+    parser.add_argument(      "--seed",         help="Random number seed",          type=int,       default=42)
+    parser.add_argument("-v", "--verbose",      help="Debug output",                action="count", default=0)
     options = parser.parse_args()
     main(options)
