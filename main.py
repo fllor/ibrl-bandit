@@ -10,6 +10,7 @@ class BanditEnvironment:
     """
     def __init__(self, k : int):
         self.num_arms = k
+        self.reset()
 
     def interact(self, action : int, prediction = None) -> float:
         assert action >= 0 and action < self.num_arms
@@ -17,6 +18,9 @@ class BanditEnvironment:
 
     def get_best_action(self) -> int:
         return self.true_values.argmax()
+
+    def get_best_reward(self):
+        return self.true_values.max()
 
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
@@ -28,6 +32,7 @@ class PolicyDependentBanditEnvironment:
     def __init__(self, k : int, sample : bool = True):
         self.num_arms = k
         self.sample = sample
+        self.reset()
 
     def interact(self, action : int, prediction : int) -> float:
         assert action >= 0 and action < self.num_arms
@@ -40,6 +45,10 @@ class PolicyDependentBanditEnvironment:
     def get_best_action(self) -> int:
         # Logically consistent actions are along the diagonal
         return self.true_values.diagonal().argmax()
+
+    def get_best_reward(self) -> int:
+        # Logically consistent actions are along the diagonal
+        return self.true_values.diagonal().max()
 
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,self.num_arms))  # 2D array
@@ -55,17 +64,33 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
     Predicted 2-box & action 1-box -> reward 0
     Predicted 2-box & action 2-box -> reward 1
     """
-    def __init__(self):
-        super().__init__(2, False)
+    def __init__(self, k : int = 2): # k is ignored here but kept for signature consistency
+        super().__init__(k=2)
 
     def reset(self):
         self.true_values = np.array([
             [100,101],
             [0,1]
         ])
+        
+    def interact(self, action, prediction):
+        return self.true_values[prediction][action]
+    def get_best_reward(self):
+        return 100
 
 
-class ClassicalAgent:
+class BaseAgent:
+    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
+        self.num_actions = k
+        self.k = k
+        self.epsilon = epsilon
+        self.optimism = optimism
+        self.reset()
+    def get_action(self): raise NotImplementedError
+    def get_greedy_action(self): raise NotImplementedError
+    def update(self, a, r, p): raise NotImplementedError
+
+class ClassicalAgent(BaseAgent):
     """
     Classical reinforcement learning agent that interacts with a multi-armed bandit
 
@@ -73,15 +98,10 @@ class ClassicalAgent:
     Use epsilon-greedy policy to balance continuous exploration
     Optionally start with optimism to encourage early exploration
     """
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.epsilon = epsilon
-        self.optimism = optimism
 
     def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
-        return self.values.argmax()
+        if np.random.rand() < self.epsilon: return np.random.randint(self.k)
+        return self.get_greedy_action()
 
     def get_greedy_action(self):
         return self.values.argmax()
@@ -93,10 +113,10 @@ class ClassicalAgent:
         self.values[action] += (reward - self.values[action]) / self.counts[action]
 
     def reset(self):
-        self.values = np.ones((self.num_actions,))*self.optimism
-        self.counts = np.zeros((self.num_actions,))
+        self.values = np.ones(self.k) * self.optimism
+        self.counts = np.zeros(self.k)
 
-class BayesianAgent:
+class BayesianAgent(BaseAgent):
     """
     Agent using Bayesian inference
 
@@ -104,41 +124,28 @@ class BayesianAgent:
     Use epsilon-greedy policy to balance continuous exploration
     Optionally start with optimism to encourage early exploration
     """
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.sigma_true = 1 # assume standard deviation of reward sampling is known
-
-    def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
-        return self.values.argmax()
-
-    def get_greedy_action(self):
-        return self.values.argmax()
-
-    def update(self, action : int, reward : float, prediction = None):
-        # estimate reward of the action and its uncertainty based on observed reward and priors
-        # Formulae from https://slinderman.github.io/stats305c/notebooks/01_bayes_normal.html#normal-model-with-unknown-mean
-        tmp = 1/self.sigma[action]**2 + 1/self.sigma_true**2
-        self.values[action] = (self.values[action]/self.sigma[action]**2 + reward/self.sigma_true**2)/tmp
-        self.sigma[action] = 1/np.sqrt(tmp)
-
     def reset(self):
-        self.values = np.ones((self.num_actions,))*self.optimism   # prior for rewards, will converge to true values
-        self.sigma = np.ones((self.num_actions,))*self.sigma_true  # uncertainty of rewards, will converge to 0
+        self.values = np.ones(self.k) * self.optimism
+        self.prec = np.ones(self.k) * 0.1 
+    
+    def get_action(self):
+        if np.random.rand() < self.epsilon: 
+            return np.random.randint(self.k)
+        return self.get_greedy_action()
+    
+    def get_greedy_action(self): 
+        return self.values.argmax()
 
-class InfrabayesianAgent:
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.sigma_true = 1 # assume standard deviation of reward sampling is known
+    def update(self, a: int, r: float, p=None):
+        new_prec = self.prec[a] + 1.0
+        self.values[a] = (self.prec[a] * self.values[a] + r) / new_prec
+        self.prec[a] = new_prec
+
+class InfrabayesianAgent(BaseAgent):
 
     def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
+        if np.random.rand() < self.epsilon: 
+            return np.random.randint(self.k)
         return self.get_greedy_action()
 
     def get_greedy_action(self):
@@ -149,16 +156,28 @@ class InfrabayesianAgent:
         # Effectively, this means we just need to consider the diagonal of the expected-value matrix
         return self.values.diagonal().argmax()
 
-    def update(self, action : int, reward : float, prediction : int):
-        # estimate reward of the action and its uncertainty based on observed reward and priors
-        tmp = 1/self.sigma[prediction][action]**2 + 1/self.sigma_true**2
-        self.values[prediction][action] = (self.values[prediction][action]/self.sigma[prediction][action]**2 + reward/self.sigma_true**2)/tmp
-        self.sigma[prediction][action] = 1/np.sqrt(tmp)
+    def update(self, a, r, p=0):
+        # Default p=0 handles standard bandits that don't pass a prediction
+        p = p if p is not None else 0
+        new_prec = self.prec[p, a] + 1.0
+        self.values[p, a] = (self.prec[p, a] * self.values[p, a] + r) / new_prec
+        self.prec[p, a] = new_prec
 
     def reset(self):
-        # 2D array to hold expected reward for all (prediction,action) pairs:
-        self.values = np.ones((self.num_actions,self.num_actions))*self.optimism   # prior for rewards, will converge to true values
-        self.sigma = np.ones((self.num_actions,self.num_actions))*self.sigma_true  # uncertainty of rewards, will converge to 0
+        self.values = np.ones((self.k, self.k)) * self.optimism
+        self.prec = np.ones((self.k, self.k)) * 0.1
+
+class BayesianThompsonAgent(BayesianAgent):
+    def get_action(self):
+        std_devs = 1.0 / np.sqrt(self.prec)
+        samples = np.random.normal(self.values, std_devs)
+        return samples.argmax()
+
+class InfrabayesianThompsonAgent(InfrabayesianAgent):
+    def get_action(self):
+        diag_stds = 1.0 / np.sqrt(self.prec.diagonal())
+        samples = np.random.normal(self.values.diagonal(), diag_stds)
+        return samples.argmax()
 
 def main(options):
     np.random.seed(options.seed)
