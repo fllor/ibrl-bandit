@@ -65,16 +65,19 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
         ])
 
 
-class ClassicalAgent:
+class QLearningAgent:
     """
-    Classical reinforcement learning agent that interacts with a multi-armed bandit
+    Classical Q-learning agent that interacts with a multi-armed bandit
 
-    Action values are estimated as sample averages (which assumes true values are stationary)
-    Use epsilon-greedy policy to balance continuous exploration
-    Optionally start with optimism to encourage early exploration
+    Arguments:
+        learning_rate:  Learning rate for Q-learning
+                        If None, use sample averages instead of Q-learning
+        epsilon:        Parameter for epsilon-greedy policy encourage exploration
+        optimism:       Initial Q-values to encourage early exploration
     """
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
+    def __init__(self, k : int, learning_rate : float = 0.1, epsilon : float = 0.1, optimism : float = 0):
         self.num_actions = k
+        self.learning_rate = learning_rate
         self.epsilon = epsilon
         self.optimism = optimism
 
@@ -87,14 +90,18 @@ class ClassicalAgent:
         return self.values.argmax()
 
     def update(self, action : int, reward : float, prediction = None):
-        # Update sample averages based on new observation
-        # Equation 2.3 from Barto&Sutton
-        self.counts[action] += 1
-        self.values[action] += (reward - self.values[action]) / self.counts[action]
+        if self.learning_rate is None:
+            # Use sample average
+            self.counts[action] += 1
+            self.values[action] += (reward - self.values[action]) / self.counts[action]
+        else:
+            # Q-learning
+            self.values[action] += self.learning_rate * (reward - self.values[action])
 
     def reset(self):
+        if self.learning_rate is None:
+            self.counts = np.zeros((self.num_actions,))
         self.values = np.ones((self.num_actions,))*self.optimism
-        self.counts = np.zeros((self.num_actions,))
 
 class InfrabayesianAgent:
     def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
@@ -141,8 +148,8 @@ def main(options):
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
-    if options.agent.startswith("classic"):
-        agent = ClassicalAgent(options.arms, options.epsilon, options.optimism)
+    if options.agent.startswith("q"):
+        agent = QLearningAgent(options.arms, options.learning, options.epsilon, options.optimism)
     elif options.agent.startswith("infrabayes"):
         agent = InfrabayesianAgent(options.arms, options.epsilon, options.optimism)
     else:
@@ -177,6 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("environment",      help="Environment type",            type=str)
     parser.add_argument("agent",            help="Agent type",                  type=str)
     parser.add_argument("-k", "--arms",     help="Number of arms",              type=int,       default=10)
+    parser.add_argument("-l", "--learning", help="Learning rate",               type=float,     default=0.1)
     parser.add_argument("-e", "--epsilon",  help="Parameter for exploration",   type=float,     default=0.1)
     parser.add_argument("-o", "--optimism", help="Parameter for reward priors", type=float,     default=0.0)
     parser.add_argument("-s", "--steps",    help="Number of steps per episode", type=int,       default=1000)

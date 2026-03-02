@@ -16,15 +16,15 @@ outputs/bandit outputs/newcomb outputs/pdbandit figures: %:
 	mkdir -p $@
 
 $(OUTPUTS_BANDIT_CLASSICAL): outputs/bandit/classical_%.txt: main.py | outputs/bandit
-	python3 -m main bandit classical $(OPTIONS_BANDIT) --epsilon $* > $@
+	python3 -m main bandit q $(OPTIONS_BANDIT) --epsilon $* > $@
 $(OUTPUTS_BANDIT_INFRABAYESIAN): outputs/bandit/infrabayesian_%.txt: main.py | outputs/bandit
 	python3 -m main bandit infrabayesian $(OPTIONS_BANDIT) --epsilon $* --optimism 4 > $@
 $(OUTPUTS_NEWCOMB_CLASSICAL): outputs/newcomb/classical_%.txt: main.py | outputs/newcomb
-	python3 -m main newcomb classical $(OPTIONS_NEWCOMB) --epsilon $* > $@
+	python3 -m main newcomb q $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_NEWCOMB_INFRABAYESIAN): outputs/newcomb/infrabayesian_%.txt: main.py | outputs/newcomb
 	python3 -m main newcomb infrabayesian $(OPTIONS_NEWCOMB) --epsilon $* --optimism 101 > $@
 $(OUTPUTS_PDBANDIT_CLASSICAL): outputs/pdbandit/classical_%.txt: main.py | outputs/pdbandit
-	python3 -m main pdbandit classical $(OPTIONS_NEWCOMB) --epsilon $* > $@
+	python3 -m main pdbandit q $(OPTIONS_NEWCOMB) --epsilon $* > $@
 $(OUTPUTS_PDBANDIT_INFRABAYESIAN): outputs/pdbandit/infrabayesian_%.txt: main.py | outputs/pdbandit
 	python3 -m main pdbandit infrabayesian $(OPTIONS_NEWCOMB) --epsilon $* --optimism 4 > $@
 
