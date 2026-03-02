@@ -16,8 +16,8 @@ class BanditEnvironment:
         assert action >= 0 and action < self.num_arms
         return np.random.normal(self.true_values[action], 1)
 
-    def get_best_action(self) -> int:
-        return self.true_values.argmax()
+    def get_best_reward(self) -> int:
+        return self.true_values.max()
 
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
@@ -27,8 +27,8 @@ class NewcombEnvironment:
     Newcomb's problem
 
     Two actions:
-      one-box (0): take box B
-      two-box (1): take boxes A+B
+        one-box (0): take box B
+        two-box (1): take boxes A+B
 
     Box A is always filled with a small reward. Box B is filled with a larger reward, only if the agent the agent is predicted to one-box.
     """
@@ -40,12 +40,35 @@ class NewcombEnvironment:
         box_filled = np.random.binomial(1, policy[0])  # fill second box at one-boxing rate
         return self.boxA*(action==1) + self.boxB*box_filled
 
-    def get_best_action(self) -> int:
-        return 0  # one-box
+    def get_best_reward(self) -> int:
+        return max(self.boxA, self.boxB)  # typically boxB > boxA
 
     def reset(self):
         pass
 
+class DeathInDamascusEnvironment:
+    """
+    Death in Damascus
+
+    Two actions:
+        go to Damascus (0)
+        go to Aleppo (1)
+    
+    Death knows the agent's policy and goes to one of the cities. If they end up in the same city, the agent dies.
+    """
+    def __init__(self):
+        self.death = 0  # reward upon death
+        self.life = 10  # reward upon survival
+
+    def interact(self, action : int, policy) -> float:
+        death = int(np.random.binomial(1, policy[1]))  # city chosen by death
+        return self.death if (action==death) else self.life
+
+    def get_best_reward(self) -> int:
+        return (self.life + self.death) / 2  # optimal policy 50/50 mix
+
+    def reset(self):
+        pass
 
 class QLearningAgent:
     """
@@ -88,6 +111,9 @@ def main(options):
     elif options.environment == "newcomb":
         env = NewcombEnvironment()
         assert options.arms == 2
+    elif options.environment == "damascus":
+        env = DeathInDamascusEnvironment()
+        assert options.arms == 2
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
@@ -98,13 +124,13 @@ def main(options):
 
     average_reward = np.zeros((num_steps,))
     average_reward_sq = np.zeros((num_steps,))
-    best_action_freq = np.zeros((num_steps,))
+    best_reward = 0
     for r in range(num_runs):
         if options.verbose > 0:
             print(f"Run {r+1}/{num_runs}")
         env.reset()
         agent.reset()
-        best_action = env.get_best_action()
+        best_reward += env.get_best_reward()
         for i in range(num_steps):
             policy = agent.get_policy()
             policy /= policy.sum() # for numerics
@@ -115,20 +141,21 @@ def main(options):
             agent.update(action, reward, policy)
             average_reward[i] += reward
             average_reward_sq[i] += reward**2
-            best_action_freq[i] += int(action == best_action)
+            
     average_reward /= num_runs
     average_reward_sq /= num_runs
-    best_action_freq /= num_runs
+    average_reward_spread = np.sqrt(average_reward_sq - average_reward**2)
+    average_reward_unc = average_reward_spread / np.sqrt(num_runs)
+    best_reward /= num_runs
 
     for i in range(num_steps):
+        
         print(
             i,
-            average_reward[i],                                                          # Average reward
-            math.sqrt(average_reward_sq[i] - average_reward[i]**2)/math.sqrt(num_runs), # Uncertainty of reward (converges to 0 as num_runs goes to infinity)
-            math.sqrt(average_reward_sq[i] - average_reward[i]**2),                     # Spread of reward (converges to constant)
-            best_action_freq[i],                                                        # Rate at which optimal action is taken
-            math.sqrt(best_action_freq[i] - best_action_freq[i]**2)/math.sqrt(num_runs),# Uncertainty of optimal action rate
-            math.sqrt(best_action_freq[i] - best_action_freq[i]**2)                     # Spread of optimal action rate
+            best_reward,                # Best possible reward (as determined by environment)
+            average_reward[i],          # Average reward received by agent
+            average_reward_unc[i],      # Uncertainty of reward (converges to 0 as num_runs goes to infinity)
+            average_reward_spread[i],   # Spread of reward (converges to constant)
         )
 
 

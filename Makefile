@@ -1,22 +1,21 @@
-OPTIONS_BANDIT=--arms 10 --steps 1001 --runs 2000
-OPTIONS_NEWCOMB=--arms 2 --steps 1001 --runs 2000
-IMAGES=$(foreach AGENT,classical,$(foreach ENV,bandit newcomb,figures/$(ENV).$(AGENT).png))
+ENVS=bandit newcomb damascus
+OPTIONS_BASE=--arms 2 --steps 1001 --runs 2000
+OPTIONS_bandit  =$(OPTIONS_BASE) --arms 10
+OPTIONS_newcomb =$(OPTIONS_BASE)
+OPTIONS_damascus=$(OPTIONS_BASE)
+IMAGES=$(foreach AGENT,classical,$(foreach ENV,$(ENVS),figures/$(ENV).$(AGENT).png))
 
 all: $(IMAGES)
 .PHONY: all
 
-outputs/bandit outputs/newcomb figures: %:
+outputs figures: %:
 	mkdir -p $@
 
-outputs/bandit/classical.txt: main.py | outputs/bandit
-	python3 -m main bandit q $(OPTIONS_BANDIT) > $@
-outputs/newcomb/classical.txt: main.py | outputs/newcomb
-	python3 -m main newcomb q $(OPTIONS_NEWCOMB) > $@
+$(ENVS:%=outputs/%.classical.txt): outputs/%.classical.txt: main.py | outputs
+	python3 -m main $* q $(OPTIONS_$*) > $@
 
-figures/bandit.classical.png: plot.gp outputs/bandit/classical.txt | figures
-	gnuplot -c $< bandit classical
-figures/newcomb.classical.png: plot.gp outputs/newcomb/classical.txt | figures
-	gnuplot -c $< newcomb classical
+$(ENVS:%=figures/%.classical.png): figures/%.classical.png: plot.gp outputs/%.classical.txt | figures
+	gnuplot -c $< $* classical
 
 .PHONY: clean
 clean:
