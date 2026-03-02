@@ -1,5 +1,6 @@
 import argparse
 import math
+from enum import Enum
 import numpy as np
 
 class BanditEnvironment:
@@ -70,30 +71,43 @@ class DeathInDamascusEnvironment:
     def reset(self):
         pass
 
+def epsilon_greedy(q, num_actions, step):
+    # Exploitation: randomly chose among the actions with highest value
+    best_actions = q == q.max()
+    exploit = np.ones((num_actions,))*best_actions / best_actions.sum()
+    
+    # Exploration: pick action uniformly
+    explore = np.ones((num_actions,))/num_actions
+
+    # epsilon-greedy policy with decaying epsilon
+    epsilon = max(0.01, 0.5 / math.sqrt(step))
+    return exploit * (1 - epsilon) + explore * epsilon
+
+def softmax(q, num_actions, step):
+    # Softmax of Q-values with decaying temperature
+    temperature = max(0.05, 1.0 / (step ** 0.3))
+            
+    # Numerically stable softmax
+    q_shifted = q - q.max()
+    exp_q = np.exp(q_shifted / temperature)
+    return exp_q / exp_q.sum()
+
 class QLearningAgent:
     """
     Classical Q-learning agent that interacts with a multi-armed bandit
 
     Arguments:
-        learning_rate:  Learning rate for Q-learning
+        exploration_policy: Function to build policy from Q-values
+        learning_rate:      Learning rate for Q-learning
     """
-    def __init__(self, k : int, learning_rate : float = 0.1):
+    def __init__(self, k : int, exploration_policy, learning_rate : float = 0.1):
         self.num_actions = k
+        self.exploration_policy = exploration_policy
         self.learning_rate = learning_rate
 
     def get_policy(self):
         self.step += 1
-
-        # Exploitation: randomly chose among the actions with highest value
-        best_actions = self.q == self.q.max()
-        exploit = np.ones((self.num_actions,))*best_actions / best_actions.sum()
-        
-        # Exploration: pick action uniformly
-        explore = np.ones((self.num_actions,))/self.num_actions
-
-        # epsilon-greedy policy with decaying epsilon
-        epsilon = max(0.01, 0.5 / math.sqrt(self.step))
-        return exploit * (1 - epsilon) + explore * epsilon
+        return self.exploration_policy(self.q, self.num_actions, self.step)
 
     def update(self, action : int, reward : float, prediction = None):
         self.q[action] += self.learning_rate * (reward - self.q[action])
@@ -117,8 +131,15 @@ def main(options):
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
+    if options.policy.startswith("epsilon"):
+        exploration_policy = epsilon_greedy
+    elif options.policy.startswith("softmax"):
+        exploration_policy = softmax
+    else:
+        raise RuntimeError("Invalid policy type: " + options.agent)
+
     if options.agent.startswith("q"):
-        agent = QLearningAgent(options.arms, options.learning_rate)
+        agent = QLearningAgent(options.arms, exploration_policy, options.learning_rate)
     else:
         raise RuntimeError("Invalid agent type: " + options.agent)
 
@@ -163,6 +184,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RL test with multi-armed bandit")
     parser.add_argument("environment",          help="Environment type",            type=str)
     parser.add_argument("agent",                help="Agent type",                  type=str)
+    parser.add_argument("-p", "--policy",       help="Method to build policy",      type=str,       default="epsilon-greedy")
     parser.add_argument("-k", "--arms",         help="Number of arms",              type=int,       default=10)
     parser.add_argument("-l", "--learning-rate",help="Learning rate",               type=float,     default=0.1)
     parser.add_argument("-s", "--steps",        help="Number of steps per episode", type=int,       default=1001)
