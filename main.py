@@ -17,65 +17,81 @@ class BanditEnvironment:
         assert action >= 0 and action < self.num_arms
         return np.random.normal(self.true_values[action], 1)
 
-    def get_best_reward(self) -> int:
+    def get_optimal_reward(self) -> int:
         return self.true_values.max()
 
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
 
-class NewcombEnvironment:
+class NewcombLikeEnvironment:
     """
-    Newcomb's problem
+    Policy dependent environment with two possible actions
 
-    Two actions:
-        one-box (0): take box B
-        two-box (1): take boxes A+B
-
-    Box A is always filled with a small reward. Box B is filled with a larger reward, only if the agent the agent is predicted to one-box.
+    If action i was predicted and action j was taken, the reward will be reward_table[i][j]
     """
-    def __init__(self):
-        self.boxA = 5   # guaranteed content of first box
-        self.boxB = 10  # conditional content of second box
+    def __init__(self, reward_table):
+        assert len(reward_table) == 2
+        self.reward_table = reward_table
 
     def interact(self, action : int, policy) -> float:
-        box_filled = np.random.binomial(1, policy[0])  # fill second box at one-boxing rate
-        return self.boxA*(action==1) + self.boxB*box_filled
+        prediction = np.random.choice(len(policy), p=policy)
+        return self.reward_table[prediction][action]
 
-    def get_best_reward(self) -> int:
-        return max(self.boxA, self.boxB)  # typically boxB > boxA
+    def get_optimal_reward(self) -> int:
+        # The reward is a quadratic function of the probability of taking action 0.
+        # Thus, there are three policies that could potentially be optimal
+        (a,b),(c,d) = self.reward_table
+        return max(
+            a,  # always take action 0
+            d,  # always take action 1
+            (a*d-(b+c)**2/4)/(a+d-b-c) if (a+d-b-c) != 0 else float("inf")
+                # take action 0 with probability (b+c-2*d)/(b+c-a-d)/2
+        )
 
     def reset(self):
         pass
 
-class DeathInDamascusEnvironment:
-    """
-    Death in Damascus
 
-    Two actions:
-        go to Damascus (0)
-        go to Aleppo (1)
-    
-    Death knows the agent's policy and goes to one of the cities. If they end up in the same city, the agent dies.
-    """
+class NewcombEnvironment(NewcombLikeEnvironment):
     def __init__(self):
-        self.death = 0  # reward upon death
-        self.life = 10  # reward upon survival
+        boxA = 5   # guaranteed content of first box
+        boxB = 10  # conditional content of second box
+        super().__init__([
+            [boxB, boxB+boxA],
+            [0,    boxA     ]
+        ])
 
-    def interact(self, action : int, policy) -> float:
-        death = int(np.random.binomial(1, policy[1]))  # city chosen by death
-        return self.death if (action==death) else self.life
+class DeathInDamascusEnvironment(NewcombLikeEnvironment):
+    def __init__(self, asymmetry = 0.):
+        death = 0  # reward upon death
+        life = 10  # reward upon survival
+        super().__init__([
+            [death, life ],
+            [life,  death],
+        ])
 
-    def get_best_reward(self) -> int:
-        return (self.life + self.death) / 2  # optimal policy 50/50 mix
+class AsymmetricDeathInDamascusEnvironment(NewcombLikeEnvironment):
+    def __init__(self):
+        death_in_damascus = 0   # reward upon death in Damascus
+        death_in_aleppo = 5     # reward upon death in Aleppo
+        life = 10               # reward upon survival
+        super().__init__([
+            [death_in_damascus, life           ],
+            [life,              death_in_aleppo],
+        ])
 
-    def reset(self):
-        pass
+class CoordinationGameEnvironment(NewcombLikeEnvironment):
+    def __init__(self):
+        super().__init__([
+            [2, 0],
+            [0, 1],
+        ])
 
 def epsilon_greedy(q, num_actions, step):
     # Exploitation: randomly chose among the actions with highest value
-    best_actions = q == q.max()
+    best_actions = (q == q.max())
     exploit = np.ones((num_actions,))*best_actions / best_actions.sum()
-    
+
     # Exploration: pick action uniformly
     explore = np.ones((num_actions,))/num_actions
 
@@ -86,7 +102,7 @@ def epsilon_greedy(q, num_actions, step):
 def softmax(q, num_actions, step):
     # Softmax of Q-values with decaying temperature
     temperature = max(0.05, 1.0 / (step ** 0.3))
-            
+
     # Numerically stable softmax
     q_shifted = q - q.max()
     exp_q = np.exp(q_shifted / temperature)
@@ -128,6 +144,12 @@ def main(options):
     elif options.environment == "damascus":
         env = DeathInDamascusEnvironment()
         assert options.arms == 2
+    elif options.environment == "asymmetric-damascus":
+        env = AsymmetricDeathInDamascusEnvironment()
+        assert options.arms == 2
+    elif options.environment == "coordination":
+        env = CoordinationGameEnvironment()
+        assert options.arms == 2
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
@@ -151,7 +173,7 @@ def main(options):
             print(f"Run {r+1}/{num_runs}")
         env.reset()
         agent.reset()
-        best_reward += env.get_best_reward()
+        best_reward += env.get_optimal_reward()
         for i in range(num_steps):
             policy = agent.get_policy()
             policy /= policy.sum() # for numerics
@@ -162,7 +184,7 @@ def main(options):
             agent.update(action, reward, policy)
             average_reward[i] += reward
             average_reward_sq[i] += reward**2
-            
+
     average_reward /= num_runs
     average_reward_sq /= num_runs
     average_reward_spread = np.sqrt(average_reward_sq - average_reward**2)
