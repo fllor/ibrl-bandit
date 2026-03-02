@@ -21,32 +21,10 @@ class BanditEnvironment:
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
 
-class PolicyDependentBanditEnvironment:
+
+class NewcombEnvironment:
     """
-    Like a multi-armed bandit, but the reward depends on the (prediction,action) pair, rather than just the action
-    """
-    def __init__(self, k : int, sample : bool = True):
-        self.num_arms = k
-        self.sample = sample
-
-    def interact(self, action : int, prediction : int) -> float:
-        assert action >= 0 and action < self.num_arms
-        assert prediction >= 0 and prediction < self.num_arms
-        if self.sample:
-            return np.random.normal(self.true_values[prediction][action], 1)
-        else:
-            return self.true_values[prediction][action]
-
-    def get_best_action(self) -> int:
-        # Logically consistent actions are along the diagonal
-        return self.true_values.diagonal().argmax()
-
-    def reset(self):
-        self.true_values = np.random.normal(0, 1, (self.num_arms,self.num_arms))  # 2D array
-
-class NewcombEnvironment(PolicyDependentBanditEnvironment):
-    """
-    Newcomb's problem (special case of policy-dependent bandit)
+    Newcomb's problem
     Two possible actions: 1-box or 2-box
     The reward depends on the predicted action and actual action of the agent
 
@@ -56,13 +34,21 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
     Predicted 2-box & action 2-box -> reward 1
     """
     def __init__(self):
-        super().__init__(2, False)
-
-    def reset(self):
         self.true_values = np.array([
             [100,101],
             [0,1]
         ])
+
+    def interact(self, action : int, prediction : int) -> float:
+        assert action >= 0 and action < 2
+        assert prediction >= 0 and prediction < 2
+        return self.true_values[prediction][action]
+
+    def get_best_action(self) -> int:
+        return 0  # one-box
+
+    def reset(self):
+        pass
 
 
 class QLearningAgent:
@@ -103,45 +89,12 @@ class QLearningAgent:
             self.counts = np.zeros((self.num_actions,))
         self.values = np.ones((self.num_actions,))*self.optimism
 
-class InfrabayesianAgent:
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.sigma_true = 1 # assume standard deviation of reward sampling is known
-
-    def get_action(self):
-        if np.random.binomial(1, self.epsilon) == 1:
-            return np.random.randint(0, self.num_actions)
-        return self.get_greedy_action()
-
-    def get_greedy_action(self):
-        # We have expected values for all (prediction,action) pairs.
-        # However, all entries with prediction!=action are logically inconsistent. They get sent to nirvana,
-        # by assigning them infinite reward. For each action, we then take the minimum possible reward over
-        # all predictions (environments).
-        # Effectively, this means we just need to consider the diagonal of the expected-value matrix
-        return self.values.diagonal().argmax()
-
-    def update(self, action : int, reward : float, prediction : int):
-        # estimate reward of the action and its uncertainty based on observed reward and priors
-        tmp = 1/self.sigma[prediction][action]**2 + 1/self.sigma_true**2
-        self.values[prediction][action] = (self.values[prediction][action]/self.sigma[prediction][action]**2 + reward/self.sigma_true**2)/tmp
-        self.sigma[prediction][action] = 1/np.sqrt(tmp)
-
-    def reset(self):
-        # 2D array to hold expected reward for all (prediction,action) pairs:
-        self.values = np.ones((self.num_actions,self.num_actions))*self.optimism   # prior for rewards, will converge to true values
-        self.sigma = np.ones((self.num_actions,self.num_actions))*self.sigma_true  # uncertainty of rewards, will converge to 0
-
 def main(options):
     np.random.seed(options.seed)
     num_steps = options.steps
     num_runs = options.runs
     if options.environment == "bandit":
         env = BanditEnvironment(options.arms)
-    elif options.environment == "pdbandit":
-        env = PolicyDependentBanditEnvironment(options.arms)
     elif options.environment == "newcomb":
         env = NewcombEnvironment()
         assert options.arms == 2
@@ -150,8 +103,6 @@ def main(options):
 
     if options.agent.startswith("q"):
         agent = QLearningAgent(options.arms, options.learning, options.epsilon, options.optimism)
-    elif options.agent.startswith("infrabayes"):
-        agent = InfrabayesianAgent(options.arms, options.epsilon, options.optimism)
     else:
         raise RuntimeError("Invalid agent type: " + options.agent)
 
