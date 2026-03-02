@@ -185,7 +185,7 @@ if __name__ == "__main__":
     parser.add_argument("environment",          help="Environment type",            type=str)
     parser.add_argument("agent",                help="Agent type",                  type=str)
     parser.add_argument("-p", "--policy",       help="Method to build policy",      type=str,       default="epsilon-greedy")
-    parser.add_argument("-k", "--arms",         help="Number of arms",              type=int,       default=10)
+    parser.add_argument("-k", "--arms",         help="Number of arms",              type=int,       default=2)
     parser.add_argument("-l", "--learning-rate",help="Learning rate",               type=float,     default=0.1)
     parser.add_argument("-s", "--steps",        help="Number of steps per episode", type=int,       default=1001)
     parser.add_argument("-r", "--runs",         help="Number of episodes to run",   type=int,       default=1)
