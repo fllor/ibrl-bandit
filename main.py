@@ -1,5 +1,6 @@
 import argparse
 import numpy as np
+from agents import BaseAgent
 
 class BanditEnvironment:
     """
@@ -75,24 +76,14 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
         
     def interact(self, action, prediction):
         return self.true_values[prediction][action]
+    
     def get_best_reward(self):
         return 100
 
 
-class BaseAgent:
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.k = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.reset()
-    def get_action(self): raise NotImplementedError
-    def get_greedy_action(self): raise NotImplementedError
-    def update(self, a, r, p): raise NotImplementedError
-
 class ClassicalAgent(BaseAgent):
     """
-    Classical reinforcement learning agent that interacts with a multi-armed bandit
+    Classical epsilon-greedy multi-armed bandit agent
 
     Action values are estimated as sample averages (which assumes true values are stationary)
     Use epsilon-greedy policy to balance continuous exploration
@@ -100,7 +91,8 @@ class ClassicalAgent(BaseAgent):
     """
 
     def get_action(self):
-        if np.random.rand() < self.epsilon: return np.random.randint(self.k)
+        if np.random.rand() < self.epsilon: 
+            return np.random.randint(self.k)
         return self.get_greedy_action()
 
     def get_greedy_action(self):
@@ -124,10 +116,7 @@ class BayesianAgent(BaseAgent):
     Use epsilon-greedy policy to balance continuous exploration
     Optionally start with optimism to encourage early exploration
     """
-    def reset(self):
-        self.values = np.ones(self.k) * self.optimism
-        self.prec = np.ones(self.k) * 0.1 
-    
+
     def get_action(self):
         if np.random.rand() < self.epsilon: 
             return np.random.randint(self.k)
@@ -137,10 +126,16 @@ class BayesianAgent(BaseAgent):
         return self.values.argmax()
 
     def update(self, a: int, r: float, p=None):
+        """
+        Define precision, tau, as 1/sigma^2 to avoid vanishing sigma precision issues
+        """
         new_prec = self.prec[a] + 1.0
         self.values[a] = (self.prec[a] * self.values[a] + r) / new_prec
         self.prec[a] = new_prec
-
+    def reset(self):
+        self.values = np.ones(self.k) * self.optimism
+        self.prec = np.ones(self.k) * 0.1 
+    
 class InfrabayesianAgent(BaseAgent):
 
     def get_action(self):
@@ -166,18 +161,6 @@ class InfrabayesianAgent(BaseAgent):
     def reset(self):
         self.values = np.ones((self.k, self.k)) * self.optimism
         self.prec = np.ones((self.k, self.k)) * 0.1
-
-class BayesianThompsonAgent(BayesianAgent):
-    def get_action(self):
-        std_devs = 1.0 / np.sqrt(self.prec)
-        samples = np.random.normal(self.values, std_devs)
-        return samples.argmax()
-
-class InfrabayesianThompsonAgent(InfrabayesianAgent):
-    def get_action(self):
-        diag_stds = 1.0 / np.sqrt(self.prec.diagonal())
-        samples = np.random.normal(self.values.diagonal(), diag_stds)
-        return samples.argmax()
 
 def main(options):
     np.random.seed(options.seed)
