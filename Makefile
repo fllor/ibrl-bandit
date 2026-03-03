@@ -3,7 +3,6 @@ AGENTS=classical experimental1 experimental2
 POLICIES=epsilon softmax
 OPTIONS_BASE=--steps 1001 --runs 2000
 OPTIONS_bandit=--arms 10
-OPTIONS_experimental2= --runs 500
 ALL=$(foreach env,$(ENVS),$(foreach agent,$(AGENTS),figures/$(env).$(agent).png))
 ALL:=$(filter-out figures/bandit.experimental2.png,$(ALL))
 

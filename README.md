@@ -16,32 +16,36 @@ The following environments are currently implemented:[^1]
 The following agents are investigated:
 1) Classical **Q-learning agent**:[^2] The agent uses either an epsilon-greedy or a softmax policy (with decaying epsilon/temperature) to encourage exploration.
 2) **Experimental agent 1**: Similar to Q-learning, but instead of returning a non-deterministic policy, it samples an action from that policy and then returns a deterministic policy that chooses this action. The predictor will thus deterministically predict that action. We therefore only access the diagonal entries of the reward table and are able to learn them via classical methods. If this optimal policy is deterministic, this agent is expected to converge to it.
+3) **Experimental agent 2**: This agent aims to learn the entire reward table, as that allows constructing the optimal policy explicitly, even if it is non-deterministic. The agent achieves this by picking strongly peaked (but still non-deterministic) policies, such that it can be fairly confident in what the predictor chose. Since we know the action taken and action predicted, we can then update the corresponding entry of the reward table. Whenever we pick an action that is different from the most likely one, we can update the off-diagonal entries of the table. Learning off-diagonal elements is slow, but we eventually reconstruct the entire reward table.
 
 ## Results
 For each environment 2000 independent runs are performed. At each time step, the average reward is calculated. The results are given in the figures below.
 
-| Q-learning agent                                  | Experimental agent 1                               |
-| ------------------------------------------------- | -------------------------------------------------- |
-| ![](figures/bandit.classical.png)                 | ![](figures/bandit.experimental1.png)              |
-| ![](figures/newcomb.classical.png)                | ![](figures/newcomb.experimental1.png)             |
-| ![](figures/damascus.classical.png)               | ![](figures/damascus.experimental1.png)            |
-| ![](figures/asymmetric-damascus.classical.png)    | ![](figures/asymmetric-damascus.experimental1.png) |
-| ![](figures/coordination.classical.png)           | ![](figures/coordination.experimental1.png)        |
+| Q-learning agent                                  | Experimental agent 1                               | Experimental agent 2                               |
+| ------------------------------------------------- | -------------------------------------------------- | -------------------------------------------------- |
+| ![](figures/bandit.classical.png)                 | ![](figures/bandit.experimental1.png)              | N/A                                                |
+| ![](figures/newcomb.classical.png)                | ![](figures/newcomb.experimental1.png)             | ![](figures/newcomb.experimental2.png)             |
+| ![](figures/damascus.classical.png)               | ![](figures/damascus.experimental1.png)            | ![](figures/damascus.experimental2.png)            |
+| ![](figures/asymmetric-damascus.classical.png)    | ![](figures/asymmetric-damascus.experimental1.png) | ![](figures/asymmetric-damascus.experimental2.png) |
+| ![](figures/coordination.classical.png)           | ![](figures/coordination.experimental1.png)        | ![](figures/coordination.experimental2.png)        |
 
 We find that the classical agent converges close to the optimal policy on the multi-armed bandit environment, but fails to do so in the Newcomb-like environments. Note that the spread of individual runs is quite large. There are runs in which the classical agent achieves close-to-optimal reward on Newcomb-like environments. But even then, it does not converge on the optimal policy and looking at the plots we clearly see that we can not rely on the agent to behave sensibly on average.
 
-The experimental agent 1 is able to converge on the best deterministic policy. In Newcomb's problem and the coordination game, these are the optimal policies. In Death in Damascus, necessarily yield reward 0. In Newcomb's problem, some runs do not converge on the optimal policy within 1000 steps. This because a fast cool down of the exploration parameter was chosen. With a sufficiently slow cool down or given sufficient time, all runs will converge to the optimal policy.
+The experimental agent 1 is able to converge on the best deterministic policy. In Newcomb's problem and the coordination game, these are the optimal policies. In Death in Damascus, this necessarily yields reward 0. In Newcomb's problem, some runs do not converge to the optimal policy within 1000 steps. This because a fast cool down of the exploration parameter was chosen. With a sufficiently slow cool down or given sufficient time, all runs will converge to the optimal policy.
+
+For technical reasons, experimental agent 2 cannot yet operate in the bandit environment. In all other environment, it is able to converge on the optimal policy. Some fine-tuning of the meta-parameters was necessary, to get it to converge within 1000 steps.
 
 ## Changelog and lessons learned
 ### v2
 - Remove Bayesian and Infrabayesian agents, as they are probably not doing what we want
+- Add two experimental agents, aiming to solve Newcomb-like environments
 - Remove policy-dependent bandit environment; add more Newcomb-like environments
 - Previously the predictor received the most likely (greedy) action and set up the environment based on that. This is not what we want and it creates incentives for strange policies (e.g. one-box 51% of time, two-box otherwise). A better convention is *policy peeking*, where the predictor has access to the entire policy of the agent. Here, policy means the probability distribution from which an action is sampled. Eventually, this should include counterfactual states (branches of the history that did not play out), but for the environments considered here this does not matter. If the agent chooses a non-deterministic policy, the predictor can correspondingly set up a non-deterministic environment (e.g. if the agent's policy is to flip a coin whether to one-box or two-box, the predictor will flip a coin whether to fill the second box)
 - The statement above implicitly contains a design choice: we assume that the predictor knows the probability distribution. Alternatively, we could say that the predictor is able to predict even the outcome of the random sampling and thus knows the action. The former choice is probably more interesting. Also, for the environments considered here the second choice would effectively turn them into classical environments (if the predictor knows the exact action, it would not care how the agent got there and the policy dependence disappears. The outcome only depends on the agent's action)
 - Policies are explicitly represented as probability distributions, rather than just functions that sample from them (such that the predictor can inspect them)
 - Add softmax policy type, in addition to epsilon-greedy
 
-### v1
+### [v1](https://github.com/fllor/ibrl-bandit/tree/v1)
 - Initial release
 - Lots of conceptual mistakes
 
