@@ -1,16 +1,5 @@
-from main import *
-
-class BaseAgent:
-    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
-        self.num_actions = k
-        self.k = k
-        self.epsilon = epsilon
-        self.optimism = optimism
-        self.reset()
-    def get_action(self): raise NotImplementedError
-    def get_greedy_action(self): raise NotImplementedError
-    def update(self, a, r, p): raise NotImplementedError
-
+from main import BayesianAgent, InfrabayesianAgent, BaseAgent
+import numpy as np
 
 class BayesianThompsonAgent(BayesianAgent):
     def get_action(self):

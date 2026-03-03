@@ -1,10 +1,19 @@
 import argparse
 import numpy as np
-from agents import BaseAgent
 
 #TODO: After confirming changes, refactor into respective source code files
 
-class BanditEnvironment:
+class BaseEnvironment:
+    def __init__(self, k : int):
+        self.num_arms = k
+        self.reset()
+    
+    def get_best_reward(self): raise NotImplementedError
+    def interact(self): raise NotImplementedError
+    def reset(self): raise NotImplementedError
+
+
+class BanditEnvironment(BaseEnvironment):
     """
     Multi-armed bandit environment
 
@@ -82,6 +91,18 @@ class NewcombEnvironment(PolicyDependentBanditEnvironment):
     
     def get_best_reward(self):
         return 100
+
+class BaseAgent:
+    def __init__(self, k : int, epsilon : float = 0.1, optimism : float = 0):
+        self.num_actions = k
+        self.k = k
+        self.epsilon = epsilon
+        self.optimism = optimism
+        self.reset()
+    def get_action(self): raise NotImplementedError
+    def get_greedy_action(self): raise NotImplementedError
+    def update(self, a, r, p): raise NotImplementedError
+
 
 
 class ClassicalAgent(BaseAgent):

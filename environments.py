@@ -1,4 +1,5 @@
-from main import *
+from main import BanditEnvironment
+import numpy as np
 
 class SwitchingAdversaryEnvironment(BanditEnvironment):
     def __init__(self, k=5, switch_at=150):
