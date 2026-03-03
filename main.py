@@ -44,7 +44,7 @@ class NewcombLikeEnvironment:
         return max(
             a,  # always take action 0
             d,  # always take action 1
-            (a*d-(b+c)**2/4)/(a+d-b-c) if (a+d-b-c) != 0 else float("inf")
+            (a*d-(b+c)**2/4)/(a+d-b-c) if (a+d-b-c) != 0 else float("-inf")
                 # take action 0 with probability (b+c-2*d)/(b+c-a-d)/2
         )
 
@@ -88,15 +88,15 @@ class CoordinationGameEnvironment(NewcombLikeEnvironment):
         ])
 
 def epsilon_greedy(q, num_actions, step):
-    # Exploitation: randomly chose among the actions with highest value
+    # Exploitation: uniformly chose among the actions with highest value
     best_actions = (q == q.max())
     exploit = np.ones((num_actions,))*best_actions / best_actions.sum()
 
-    # Exploration: pick action uniformly
+    # Exploration: uniformly pick any action
     explore = np.ones((num_actions,))/num_actions
 
     # epsilon-greedy policy with decaying epsilon
-    epsilon = max(0.01, 0.5 / math.sqrt(step))
+    epsilon = max(0.01, 0.5 / (step ** 0.5))
     return exploit * (1 - epsilon) + explore * epsilon
 
 def softmax(q, num_actions, step):
@@ -113,17 +113,17 @@ class QLearningAgent:
     Classical Q-learning agent that interacts with a multi-armed bandit
 
     Arguments:
-        exploration_policy: Function to build policy from Q-values
-        learning_rate:      Learning rate for Q-learning
+        policy_function: Function to build policy from Q-values
+        learning_rate:   Learning rate for Q-learning
     """
-    def __init__(self, k : int, exploration_policy, learning_rate : float = 0.1):
+    def __init__(self, k : int, policy_function, learning_rate : float = 0.1):
         self.num_actions = k
-        self.exploration_policy = exploration_policy
+        self.policy_function = policy_function
         self.learning_rate = learning_rate
 
     def get_policy(self):
         self.step += 1
-        return self.exploration_policy(self.q, self.num_actions, self.step)
+        return self.policy_function(self.q, self.num_actions, self.step)
 
     def update(self, action : int, reward : float, prediction = None):
         self.q[action] += self.learning_rate * (reward - self.q[action])
@@ -131,6 +131,20 @@ class QLearningAgent:
     def reset(self):
         self.q = np.zeros((self.num_actions,))
         self.step = 0
+
+class ExperimentalAgent1(QLearningAgent):
+    """
+    Instead of using the non-deterministic policy from Q-learning, sample an
+    action from this policy and return a deterministic policy that chooses this
+    action. Consequently, we only access the diagonal of the reward matrix.
+    """
+    def get_policy(self):
+        proto_policy = super().get_policy()
+        proto_policy /= proto_policy.sum() # for numerics
+        action = np.random.choice(len(proto_policy), p=proto_policy)
+        policy = np.zeros((self.num_actions,))
+        policy[action] = 1
+        return policy
 
 def main(options):
     np.random.seed(options.seed)
@@ -154,14 +168,16 @@ def main(options):
         raise RuntimeError("Invalid environment: " + options.environment)
 
     if options.policy.startswith("epsilon"):
-        exploration_policy = epsilon_greedy
+        policy_function = epsilon_greedy
     elif options.policy.startswith("softmax"):
-        exploration_policy = softmax
+        policy_function = softmax
     else:
         raise RuntimeError("Invalid policy type: " + options.agent)
 
-    if options.agent.startswith("q"):
-        agent = QLearningAgent(options.arms, exploration_policy, options.learning_rate)
+    if options.agent.startswith("classical"):
+        agent = QLearningAgent(options.arms, policy_function, options.learning_rate)
+    elif options.agent.startswith("experimental1"):
+        agent = ExperimentalAgent1(options.arms, policy_function, options.learning_rate)
     else:
         raise RuntimeError("Invalid agent type: " + options.agent)
 
@@ -192,7 +208,6 @@ def main(options):
     best_reward /= num_runs
 
     for i in range(num_steps):
-        
         print(
             i,
             best_reward,                # Best possible reward (as determined by environment)
