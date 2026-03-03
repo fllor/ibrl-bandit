@@ -1,6 +1,14 @@
 # Infrabayesian Reinforcement Learning Experiment
 This is minimal implementation of a reinforcement learning agent using infrabayesianism. It is designed to be the simplest scenario where classical agents fail, but infrabayesian ones succeed.
 
+## Structure
+Code is divided into:
+- agents.py (where agents are defined and new agents can be added)
+- environments.py (new environments can be added)
+- simulator.py (runs the game)
+- `experiments/` (mostly jupyter notebook or any other experiment+results artifacts. Please add your handle as a new directory and add your results there)
+Eventually agents, environments and simulator might become directories if possible agents and environments become numerous enough to deserve their own files.
+
 ## Environments
 The implementation focuses on multi-armed bandit-like environments, which consist of a single time-step and where no information is available to the agent, prior to making its decision. Restricting to these environments avoids much of the complexity usually associated with this problem.
 
