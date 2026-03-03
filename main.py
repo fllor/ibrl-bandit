@@ -2,6 +2,8 @@ import argparse
 import numpy as np
 from agents import BaseAgent
 
+#TODO: After confirming changes, refactor into respective source code files
+
 class BanditEnvironment:
     """
     Multi-armed bandit environment
@@ -14,6 +16,7 @@ class BanditEnvironment:
         self.reset()
 
     def interact(self, action : int, prediction = None) -> float:
+        # Prediction as unused arg to keep signature consistent
         assert action >= 0 and action < self.num_arms
         return np.random.normal(self.true_values[action], 1)
 
