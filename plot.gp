@@ -3,7 +3,7 @@ AGENT=ARG2
 
 set style fill transparent solid 0.5
 
-set term pngcairo size 1280,640 linewidth 3 fontscale 1.5;
+set term pngcairo size 1024,512 linewidth 3 fontscale 1.5;
 set output "figures/".ENV.".".AGENT.".png";
 set grid;
 set key box bottom center opaque;

@@ -13,18 +13,24 @@ The following environments are currently implemented:[^1]
 
 
 ## Agents
-Currently, only a classical Q-learning agent is considered.[^2] The agent uses either an epsilon-greedy or a softmax policy (with decaying epsilon/temperature) to encourage exploration.
+The following agents are investigated:
+1) Classical **Q-learning agent**:[^2] The agent uses either an epsilon-greedy or a softmax policy (with decaying epsilon/temperature) to encourage exploration.
+2) **Experimental agent 1**: Similar to Q-learning, but instead of returning a non-deterministic policy, it samples an action from that policy and then returns a deterministic policy that chooses this action. The predictor will thus deterministically predict that action. We therefore only access the diagonal entries of the reward table and are able to learn them via classical methods. If this optimal policy is deterministic, this agent is expected to converge to it.
 
 ## Results
 For each environment 2000 independent runs are performed. At each time step, the average reward is calculated. The results are given in the figures below.
 
-<p align="center"><img src="figures/bandit.classical.png"></p>
-<p align="center"><img src="figures/newcomb.classical.png"></p>
-<p align="center"><img src="figures/damascus.classical.png"></p>
-<p align="center"><img src="figures/asymmetric-damascus.classical.png"></p>
-<p align="center"><img src="figures/coordination.classical.png"></p>
+| Q-learning agent                                  | Experimental agent 1                               |
+| ------------------------------------------------- | -------------------------------------------------- |
+| ![](figures/bandit.classical.png)                 | ![](figures/bandit.experimental1.png)              |
+| ![](figures/newcomb.classical.png)                | ![](figures/newcomb.experimental1.png)             |
+| ![](figures/damascus.classical.png)               | ![](figures/damascus.experimental1.png)            |
+| ![](figures/asymmetric-damascus.classical.png)    | ![](figures/asymmetric-damascus.experimental1.png) |
+| ![](figures/coordination.classical.png)           | ![](figures/coordination.experimental1.png)        |
 
-We find that the classical agent converges close to the optimal policy on the multi-armed bandit environment, but fails to do so the the Newcomb-like environments. Note that the spread of individual runs is quite large. There are runs in which the classical agent achieves close-to-optimal reward on Newcomb-like environments. But even then, it does not converge on the optimal policy and looking at the plots we clearly see that we can not rely on the agent to behave sensibly on average.
+We find that the classical agent converges close to the optimal policy on the multi-armed bandit environment, but fails to do so in the Newcomb-like environments. Note that the spread of individual runs is quite large. There are runs in which the classical agent achieves close-to-optimal reward on Newcomb-like environments. But even then, it does not converge on the optimal policy and looking at the plots we clearly see that we can not rely on the agent to behave sensibly on average.
+
+The experimental agent 1 is able to converge on the best deterministic policy. In Newcomb's problem and the coordination game, these are the optimal policies. In Death in Damascus, necessarily yield reward 0. In Newcomb's problem, some runs do not converge on the optimal policy within 1000 steps. This because a fast cool down of the exploration parameter was chosen. With a sufficiently slow cool down or given sufficient time, all runs will converge to the optimal policy.
 
 ## Changelog and lessons learned
 ### v2
