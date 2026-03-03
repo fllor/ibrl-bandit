@@ -27,24 +27,24 @@ class NewcombLikeEnvironment:
     """
     Policy dependent environment with two possible actions
 
-    If action i was predicted and action j was taken, the reward will be reward_table[i][j]
+    If action i was predicted and action j was taken, the reward will be reward_table[i,j]
     """
     def __init__(self, reward_table):
         assert len(reward_table) == 2
-        self.reward_table = reward_table
+        self.reward_table = np.array(reward_table)
 
     def interact(self, action : int, policy) -> float:
         prediction = np.random.choice(len(policy), p=policy)
-        return self.reward_table[prediction][action]
+        return self.reward_table[prediction,action]
 
     def get_optimal_reward(self) -> int:
         # The reward is a quadratic function of the probability of taking action 0.
         # Thus, there are three policies that could potentially be optimal
-        (a,b),(c,d) = self.reward_table
+        (a,b),(c,d) = self.reward_table.tolist()
         return max(
             a,  # always take action 0
             d,  # always take action 1
-            (a*d-(b+c)**2/4)/(a+d-b-c) if (a+d-b-c) != 0 else float("-inf")
+            (a*d-(b+c)**2/4)/(a+d-b-c) if (a+d-b-c) < 0 else float("-inf")
                 # take action 0 with probability (b+c-2*d)/(b+c-a-d)/2
         )
 
@@ -125,7 +125,7 @@ class QLearningAgent:
         self.step += 1
         return self.policy_function(self.q, self.num_actions, self.step)
 
-    def update(self, action : int, reward : float, prediction = None):
+    def update(self, action : int, reward : float, policy):
         self.q[action] += self.learning_rate * (reward - self.q[action])
 
     def reset(self):
@@ -146,7 +146,74 @@ class ExperimentalAgent1(QLearningAgent):
         policy[action] = 1
         return policy
 
+class ExperimentalAgent2:
+    """
+    Reconstruct full reward matrix
+
+    This is achieved by sometimes picking a strongly peaked policy, such that
+    we can be fairly certain what the predictor predicted. When we update, we
+    know the actual action and the predicted action and are therefore able to
+    update the correct entry of the reward matrix.
+    Even with a strongly peaked policy, we will sometimes not chose the most
+    likely action. This allows us to access the off-diagonal entries. As this
+    rarely happens, learning the off-diagonal rewards is relatively slow. To
+    speed up learning, we use sample averages, rather than Q-learning.
+
+    When exploiting, we compute the optimal policy based on the current estimate
+    of the reward matrix. This policy may be non-deterministic.
+    """
+    def __init__(self, k : int, learning_rate : float = 0.1):
+        assert k == 2  # technical limitation for now
+        self.num_actions = k
+        self.learning_rate = learning_rate
+        self.update_threshold = 0.9 # minimum peak in policy to be considered for update
+        self.exploration_peak = 20  # how strongly peaked should exploration policies be
+
+    def get_policy(self):
+        self.step += 1
+        #epsilon = max(0.01, 0.5 / (self.step ** 0.5))  # default
+        epsilon = max(0.01, 0.5 - 0.49 * self.step/700)  # schedule with more exploration
+        #epsilon = 0.1  # fixed exploration
+
+        if np.random.binomial(1, epsilon):
+            # exploration: pick a strongly peaked policy (with random peak)
+            exploration = np.ones((self.num_actions,))
+            exploration[np.random.randint(self.num_actions)] += self.exploration_peak
+            exploration /= exploration.sum()
+            return exploration
+        else:
+            # exploitation: compute optimal action based on current estimate of reward matrix
+            (a,b),(c,d) = self.q.tolist()
+            strategies = [ # (p(action0), expected reward)
+                (1, a), # always pick action 0
+                (0, d)  # always pick action 1
+            ]
+            if (a+d-b-c) < 0 and 0 < (b+c-2*d)/(b+c-a-d)/2 < 1: # mixed strategy
+                strategies.append(((b+c-2*d)/(b+c-a-d)/2, (a*d-(b+c)**2/4)/(a+d-b-c)))
+            p0 = max(strategies, key=lambda strategy: strategy[1])[0]
+            return np.array([p0, 1-p0], dtype=np.float64)
+
+    def update(self, action : int, reward : float, policy):
+        prediction = policy.argmax()
+        # only update action for which policy is strongly peaked, i.e. we can be fairly certain that the predictor chose this action
+        if policy[prediction] < self.update_threshold:
+            return
+        # updates are weighted by the corresponding policy entry
+        self.counts[prediction,action] += policy[prediction]
+        self.q[prediction,action] += policy[prediction] * (reward - self.q[prediction,action]) / self.counts[prediction,action]
+        #self.q[prediction,action] += policy[prediction] * self.learning_rate * (reward - self.q[prediction,action])
+
+    def reset(self):
+        self.counts = np.zeros((self.num_actions,self.num_actions))
+        self.q = np.zeros((self.num_actions,self.num_actions))
+        self.step = 0
+
+
 def main(options):
+    # Quietly skip this combination (experimental agent 2 does not accept softmax policy)
+    if options.agent.startswith("experimental2") and options.policy.startswith("softmax"):
+        return
+
     np.random.seed(options.seed)
     num_steps = options.steps
     num_runs = options.runs
@@ -178,6 +245,8 @@ def main(options):
         agent = QLearningAgent(options.arms, policy_function, options.learning_rate)
     elif options.agent.startswith("experimental1"):
         agent = ExperimentalAgent1(options.arms, policy_function, options.learning_rate)
+    elif options.agent.startswith("experimental2"):
+        agent = ExperimentalAgent2(options.arms, options.learning_rate)
     else:
         raise RuntimeError("Invalid agent type: " + options.agent)
 
