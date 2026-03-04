@@ -30,7 +30,8 @@ $(foreach env,$(ENVS),$(foreach agent,$(AGENTS),$(eval $(call CREATE_PLOT_TARGET
 .PHONY: $(ENVS) $(AGENTS)
 $(filter-out experimental2,$(AGENTS)): %: $(foreach env,$(ENVS),figures/$(env).%.png)
 experimental2: %: $(foreach env,$(filter-out bandit,$(ENVS)),figures/$(env).%.png)
-$(ENVS): %: $(foreach agent,$(AGENTS),figures/%.$(agent).png)
+$(filter-out bandit,$(ENVS)): %: $(foreach agent,$(AGENTS),figures/%.$(agent).png)
+bandit: %: $(foreach agent,$(filter-out experimental2,$(AGENTS)),figures/%.$(agent).png)
 
 .PHONY: clean
 clean:

@@ -1,9 +1,56 @@
 import argparse
 import math
-from enum import Enum
+from abc import ABC,abstractmethod
 import numpy as np
+from numpy.typing import NDArray
 
-class BanditEnvironment:
+def sample_action(policy: NDArray[np.float64]) -> int:
+    """
+    Sample an action from a given policy
+
+    Arguments:
+        policy: Probability distribution over actions
+
+    Returns:
+        index of action
+    """
+    policy /= policy.sum()  # for numerics
+    return np.random.choice(len(policy), p=policy)
+
+class BaseEnvironment(ABC):
+    @abstractmethod
+    def interact(self, action : int, policy : NDArray[np.float64] = None) -> float:
+        """
+        Let the predictor act, based on the given policy.
+        Compute the reward corresponding to the agent's action.
+        (Conceptually, these are two distinct steps)
+
+        Arguments:
+            policy: Policy chosen by the agent
+            action: Action sampled from the policy
+        
+        Returns:
+            reward of the interaction
+        """
+        pass
+
+    @abstractmethod
+    def get_optimal_reward(self) -> float:
+        """
+        Compute the average reward obtained by the optimal policy
+
+        Returns:
+            average reward of optimal policy
+        """
+        pass
+
+    def reset(self):
+        """
+        Reset internal state. Potentially initialise randomly
+        """
+        pass
+
+class BanditEnvironment(BaseEnvironment):
     """
     Multi-armed bandit environment
 
@@ -23,7 +70,7 @@ class BanditEnvironment:
     def reset(self):
         self.true_values = np.random.normal(0, 1, (self.num_arms,))
 
-class NewcombLikeEnvironment:
+class NewcombLikeEnvironment(BaseEnvironment):
     """
     Policy dependent environment with two possible actions
 
@@ -34,7 +81,7 @@ class NewcombLikeEnvironment:
         self.reward_table = np.array(reward_table)
 
     def interact(self, action : int, policy) -> float:
-        prediction = np.random.choice(len(policy), p=policy)
+        prediction = sample_action(policy)
         return self.reward_table[prediction,action]
 
     def get_optimal_reward(self) -> int:
@@ -108,7 +155,33 @@ def softmax(q, num_actions, step):
     exp_q = np.exp(q_shifted / temperature)
     return exp_q / exp_q.sum()
 
-class QLearningAgent:
+class BaseAgent(ABC):
+    @abstractmethod
+    def get_policy(self) -> NDArray[np.float64]:
+        """
+        Return the policy for the next episode.
+        A policy is represented as a probability distribution of possible actions.
+        """
+        pass
+
+    def update(self, policy : NDArray[np.float64], action : int, reward : float) -> None:
+        """
+        Update internal state based on outcome of the episode
+
+        Arguments:
+            policy: The policy chosen by the agent
+            action: The action selected from the policy
+            reward: The reward received
+        """
+        pass
+
+    def reset(self) -> None:
+        """
+        Reset internal state
+        """
+        pass
+
+class QLearningAgent(BaseAgent):
     """
     Classical Q-learning agent that interacts with a multi-armed bandit
 
@@ -121,11 +194,11 @@ class QLearningAgent:
         self.policy_function = policy_function
         self.learning_rate = learning_rate
 
-    def get_policy(self):
+    def get_policy(self) -> NDArray[np.float64]:
         self.step += 1
         return self.policy_function(self.q, self.num_actions, self.step)
 
-    def update(self, action : int, reward : float, policy):
+    def update(self, policy : NDArray[np.float64], action : int, reward : float):
         self.q[action] += self.learning_rate * (reward - self.q[action])
 
     def reset(self):
@@ -138,15 +211,14 @@ class ExperimentalAgent1(QLearningAgent):
     action from this policy and return a deterministic policy that chooses this
     action. Consequently, we only access the diagonal of the reward matrix.
     """
-    def get_policy(self):
+    def get_policy(self) -> NDArray[np.float64]:
         proto_policy = super().get_policy()
-        proto_policy /= proto_policy.sum() # for numerics
-        action = np.random.choice(len(proto_policy), p=proto_policy)
+        action = sample_action(proto_policy)
         policy = np.zeros((self.num_actions,))
         policy[action] = 1
         return policy
 
-class ExperimentalAgent2:
+class ExperimentalAgent2(BaseAgent):
     """
     Reconstruct full reward matrix
 
@@ -169,7 +241,7 @@ class ExperimentalAgent2:
         self.update_threshold = 0.9 # minimum peak in policy to be considered for update
         self.exploration_peak = 20  # how strongly peaked should exploration policies be
 
-    def get_policy(self):
+    def get_policy(self) -> NDArray[np.float64]:
         self.step += 1
         #epsilon = max(0.01, 0.5 / (self.step ** 0.5))  # default
         epsilon = max(0.01, 0.5 - 0.49 * self.step/700)  # schedule with more exploration
@@ -193,7 +265,7 @@ class ExperimentalAgent2:
             p0 = max(strategies, key=lambda strategy: strategy[1])[0]
             return np.array([p0, 1-p0], dtype=np.float64)
 
-    def update(self, action : int, reward : float, policy):
+    def update(self, policy : NDArray[np.float64], action : int, reward : float):
         prediction = policy.argmax()
         # only update action for which policy is strongly peaked, i.e. we can be fairly certain that the predictor chose this action
         if policy[prediction] < self.update_threshold:
@@ -261,12 +333,11 @@ def main(options):
         best_reward += env.get_optimal_reward()
         for i in range(num_steps):
             policy = agent.get_policy()
-            policy /= policy.sum() # for numerics
-            action = np.random.choice(len(policy), p=policy)
+            action = sample_action(policy)
             reward = env.interact(action, policy)
             if options.verbose > 0:
                 print(i, action, reward, policy.tolist(), agent.q.tolist())
-            agent.update(action, reward, policy)
+            agent.update(policy, action, reward)
             average_reward[i] += reward
             average_reward_sq[i] += reward**2
 
