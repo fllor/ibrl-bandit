@@ -15,10 +15,12 @@ set title ((ENV eq "bandit")                 ? "Multi-armed bandit" : \
            (ENV eq "damascus")               ? "Death in Damascus" : \
            (ENV eq "asymmetric-damascus")    ? "Asymmetric Death in Damascus" : \
            (ENV eq "coordination")           ? "Coordination game" : \
+           (ENV eq "pdbandit")               ? "Policy-dependent bandit" : \
            ENV).", ". \
-          ((AGENT eq "classical") ? "Q-learning agent" : \
-           (AGENT eq "experimental1") ? "Experimental agent 1" : \
-           (AGENT eq "experimental2") ? "Experimental agent 2" : \
+          ((AGENT eq "classical")            ? "Q-learning agent" : \
+           (AGENT eq "bayesian")             ? "Bayesian agent" : \
+           (AGENT eq "experimental1")        ? "Experimental agent 1" : \
+           (AGENT eq "experimental2")        ? "Experimental agent 2" : \
            AGENT);
 set yrange [0:];
 if(AGENT eq "experimental2") {

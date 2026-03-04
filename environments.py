@@ -45,18 +45,22 @@ class BanditEnvironment(BaseEnvironment):
     There are k discrete actions, each of which has a true values that is samples from a standard normal distribution
     The reward for a given action is sampled from a standard normal distribution shifted by the corresponding true value
     """
-    def __init__(self, k : int):
-        self.num_arms = k
+    def __init__(self, num_arms : int):
+        self.num_arms = num_arms
+        self.seed = 42
 
-    def interact(self, action : int, policy = None) -> float:
+    def interact(self, action : int, policy : NDArray[np.float64]) -> float:
         assert action >= 0 and action < self.num_arms
-        return np.random.normal(self.true_values[action], 1)
+        return np.random.normal(self.values[action], 1)
 
     def get_optimal_reward(self) -> int:
-        return self.true_values.max()
+        return self.values.max()
 
     def reset(self):
-        self.true_values = np.random.normal(0, 1, (self.num_arms,))
+        # Seed separate RNG, such that the environment is consistent across agents
+        self.seed += 1
+        self.random = np.random.default_rng(self.seed)
+        self.values = self.random.normal(0, 1, (self.num_arms,))
 
 
 class NewcombLikeEnvironment(BaseEnvironment):
@@ -122,3 +126,24 @@ class CoordinationGameEnvironment(NewcombLikeEnvironment):
             [2, 0],
             [0, 1],
         ])
+
+
+class PolicyDependentBanditEnvironment(NewcombLikeEnvironment):
+    """
+    Like a multi-armed bandit, but the reward depends on the (prediction,action) pair, rather than just the action.
+    This is a generalisation of both the multi-armed bandit and Newcomb-like problems
+    """
+    def __init__(self):
+        self.num_arms = 2
+        self.seed = 42
+        super().__init__(self.sample_reward_table())
+
+    def reset(self):
+        self.reward_table = self.sample_reward_table()
+
+    def sample_reward_table(self) -> NDArray[np.float64]:
+        # Seed separate RNG, such that the environment is consistent across agents
+        self.seed += 1
+        self.random = np.random.default_rng(self.seed)
+        return self.random.normal(0, 1, (self.num_arms,self.num_arms))  # 2D array
+

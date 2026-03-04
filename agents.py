@@ -58,11 +58,12 @@ class QLearningAgent(BaseAgent):
     Classical Q-learning agent that interacts with a multi-armed bandit
 
     Arguments:
+        num_actions:     Number of possible action in environment
         policy_function: Function to build policy from Q-values
         learning_rate:   Learning rate for Q-learning
     """
-    def __init__(self, k : int, policy_function, learning_rate : float = 0.1):
-        self.num_actions = k
+    def __init__(self, num_actions : int, policy_function : callable, learning_rate : float = 0.1):
+        self.num_actions = num_actions
         self.policy_function = policy_function
         self.learning_rate = learning_rate
 
@@ -76,6 +77,34 @@ class QLearningAgent(BaseAgent):
     def reset(self):
         self.q = np.zeros((self.num_actions,))
         self.step = 0
+
+
+class BayesianAgent(BaseAgent):
+    """
+    Agent using Bayesian inference
+
+    For each action it estimates a normal distribution and the picks the action with the largest central value
+    Use epsilon-greedy policy to balance continuous exploration
+    Optionally start with optimism to encourage early exploration
+    """
+    def __init__(self, num_actions : int, policy_function : callable):
+        self.num_actions = num_actions
+        self.policy_function = policy_function
+
+    def get_policy(self) -> NDArray[np.float64]:
+        self.step += 1
+        return self.policy_function(self.values, self.num_actions, self.step)
+
+    def update(self, policy : NDArray[np.float64], action : int, reward : float):
+        # Estimate reward of the action and its uncertainty based on observed reward and priors
+        # Define precision, tau, as 1/sigma^2 to avoid vanishing sigma precision issues
+        self.values[action] = (self.precision[action] * self.values[action] + reward) / (self.precision[action] + 1.0)
+        self.precision[action] += 1
+
+    def reset(self):
+        self.step = 0
+        self.values = np.zeros(self.num_actions)
+        self.precision = np.ones(self.num_actions) * 0.1
 
 
 class ExperimentalAgent1(QLearningAgent):

@@ -16,17 +16,20 @@ def main(options):
     if options.environment == "bandit":
         env = environments.BanditEnvironment(options.arms)
     elif options.environment == "newcomb":
+        assert options.arms == 2
         env = environments.NewcombEnvironment()
-        assert options.arms == 2
     elif options.environment == "damascus":
+        assert options.arms == 2
         env = environments.DeathInDamascusEnvironment()
-        assert options.arms == 2
     elif options.environment == "asymmetric-damascus":
+        assert options.arms == 2
         env = environments.AsymmetricDeathInDamascusEnvironment()
-        assert options.arms == 2
     elif options.environment == "coordination":
-        env = environments.CoordinationGameEnvironment()
         assert options.arms == 2
+        env = environments.CoordinationGameEnvironment()
+    elif options.environment == "pdbandit":
+        assert options.arms == 2
+        env = environments.PolicyDependentBanditEnvironment()
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
@@ -39,6 +42,8 @@ def main(options):
 
     if options.agent.startswith("classical"):
         agent = agents.QLearningAgent(options.arms, policy_function, options.learning_rate)
+    elif options.agent.startswith("bayesian"):
+        agent = agents.BayesianAgent(options.arms, policy_function)
     elif options.agent.startswith("experimental1"):
         agent = agents.ExperimentalAgent1(options.arms, policy_function, options.learning_rate)
     elif options.agent.startswith("experimental2"):
