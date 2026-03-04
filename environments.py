@@ -147,3 +147,29 @@ class PolicyDependentBanditEnvironment(NewcombLikeEnvironment):
         self.random = np.random.default_rng(self.seed)
         return self.random.normal(0, 1, (self.num_arms,self.num_arms))  # 2D array
 
+
+class SwitchingAdversaryEnvironment(BaseEnvironment):
+    def __init__(self, num_arms : int, switch_at : int = 150):
+        self.num_arms = num_arms
+        self.switch_at = switch_at
+
+    def interact(self, action : int, policy : NDArray[np.float64]) -> float:
+        # Prediction as unused arg to keep signature consistent
+        self.step += 1
+
+        # At switch_at, the 'best' arm moves to the other side
+        if self.step == self.switch_at:
+            self.values = np.zeros((self.num_arms,))
+            self.values[0] = 1.0 # Move reward to the last arm
+
+        return np.random.normal(self.values[action], 0.1)
+
+    def get_optimal_reward(self) -> int:
+        return 1.0 # The maximum reward is always 1.0
+
+    def reset(self):
+        self.step = 0
+        # Ensure Arm 0 is the best at the start
+        self.values = np.zeros((self.num_arms,))
+        self.values[0] = 1.0
+
