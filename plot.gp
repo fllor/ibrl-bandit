@@ -16,14 +16,16 @@ set title ((ENV eq "bandit")                 ? "Multi-armed bandit" : \
            (ENV eq "asymmetric-damascus")    ? "Asymmetric Death in Damascus" : \
            (ENV eq "coordination")           ? "Coordination game" : \
            (ENV eq "pdbandit")               ? "Policy-dependent bandit" : \
+           (ENV eq "switching")              ? "Switching bandit" : \
            ENV).", ". \
           ((AGENT eq "classical")            ? "Q-learning agent" : \
            (AGENT eq "bayesian")             ? "Bayesian agent" : \
+           (AGENT eq "exp3")                 ? "EXP3 agent" : \
            (AGENT eq "experimental1")        ? "Experimental agent 1" : \
            (AGENT eq "experimental2")        ? "Experimental agent 2" : \
            AGENT);
 set yrange [0:];
-if(AGENT eq "experimental2") {
+if(AGENT eq "experimental2" || AGENT eq "exp3") {
      plot "outputs/".ENV.".".AGENT.".epsilon.txt" u 1:2 w l ls 1 title "Optimal policy", \
           "outputs/".ENV.".".AGENT.".epsilon.txt" u 1:($3+$4):($3-$4) w filledcurves ls 2 notitle, \
           "outputs/".ENV.".".AGENT.".epsilon.txt" u 1:3 w l ls 2 title "ε-greedy policy";

@@ -1,5 +1,5 @@
-ENVS=bandit newcomb damascus asymmetric-damascus coordination pdbandit
-AGENTS=classical bayesian experimental1 experimental2
+ENVS=bandit newcomb damascus asymmetric-damascus coordination pdbandit switching
+AGENTS=classical bayesian exp3 experimental1 experimental2
 POLICIES=epsilon softmax
 OPTIONS_BASE=--steps 1001 --runs 2000
 OPTIONS_bandit=--arms 10

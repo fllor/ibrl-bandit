@@ -19,14 +19,15 @@ The following environments are currently implemented:[^1]
 - **Asymmetric Death in Damascus**: As above, but the agent prefers to die in Aleppo, rather than Damascus.
 - **Coordination game**: The agent plays a cooperative game against another agent with identical policy.
 - **Policy-dependent bandit**: A generalisation of both the classical multi-armed bandit and of Newcomb-like environments. A reward is sampled from a different probability distribution for each (prediction,action) pair. The probability distributions are determined randomly.
-
+- **Switching bandit**: Like the multi-armed bandit, but the reward moves to a different arm.
 
 ## Agents
 The following agents are investigated:
 1) Classical **Q-learning agent**:[^2] The agent uses either an epsilon-greedy or a softmax policy (with decaying epsilon/temperature) to encourage exploration.
 2) **Bayesian agent**: Similar to Q-learning, but maintains a probability distribution over possible rewards. At each update, the central value and uncertainty get updated based on the new observation.
-3) **Experimental agent 1**: Similar to Q-learning, but instead of returning a non-deterministic policy, it samples an action from that policy and then returns a deterministic policy that chooses this action. The predictor will thus deterministically predict that action. We therefore only access the diagonal entries of the reward table and are able to learn them via classical methods. If this optimal policy is deterministic, this agent is expected to converge to it.
-4) **Experimental agent 2**: This agent aims to learn the entire reward table, as that allows constructing the optimal policy explicitly, even if it is non-deterministic. The agent achieves this by picking strongly peaked (but still non-deterministic) policies, such that it can be fairly confident in what the predictor chose. Since we know the action taken and action predicted, we can then update the corresponding entry of the reward table. Whenever we pick an action that is different from the most likely one, we can update the off-diagonal entries of the table. Learning off-diagonal elements is slow, but we eventually reconstruct the entire reward table.
+3) **EXP3 agent**: ?
+4) **Experimental agent 1**: Similar to Q-learning, but instead of returning a non-deterministic policy, it samples an action from that policy and then returns a deterministic policy that chooses this action. The predictor will thus deterministically predict that action. We therefore only access the diagonal entries of the reward table and are able to learn them via classical methods. If this optimal policy is deterministic, this agent is expected to converge to it.
+5) **Experimental agent 2**: This agent aims to learn the entire reward table, as that allows constructing the optimal policy explicitly, even if it is non-deterministic. The agent achieves this by picking strongly peaked (but still non-deterministic) policies, such that it can be fairly confident in what the predictor chose. Since we know the action taken and action predicted, we can then update the corresponding entry of the reward table. Whenever we pick an action that is different from the most likely one, we can update the off-diagonal entries of the table. Learning off-diagonal elements is slow, but we eventually reconstruct the entire reward table.
 
 ## Results
 For each environment 2000 independent runs are performed. At each time step, the average reward is calculated. The results are given in the figures below.
@@ -39,6 +40,7 @@ For each environment 2000 independent runs are performed. At each time step, the
 | ![](figures/asymmetric-damascus.classical.png)    | ![](figures/asymmetric-damascus.experimental1.png) | ![](figures/asymmetric-damascus.experimental2.png) |
 | ![](figures/coordination.classical.png)           | ![](figures/coordination.experimental1.png)        | ![](figures/coordination.experimental2.png)        |
 | ![](figures/pdbandit.classical.png)               | ![](figures/pdbandit.experimental1.png)            | ![](figures/pdbandit.experimental2.png)            |
+| ![](figures/switching.classical.png)              | ![](figures/switching.experimental1.png)           | ![](figures/switching.experimental2.png)           |
 
 We find that the Q-learning and Bayesian agents converge close to the optimal policy on the multi-armed bandit environment, but fail to do so in the Newcomb-like environments. An [interesting exception](figures/damascus.bayesian.png) is the Bayesian agent in the Death in Damascus environment. Note that the spread of individual runs is quite large. There are runs in which the classical agent achieves close-to-optimal reward on Newcomb-like environments. But even then, it does not converge on the optimal policy and looking at the plots we clearly see that we can not rely on the agent to behave sensibly on average.
 

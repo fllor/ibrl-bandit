@@ -7,7 +7,7 @@ import utils
 
 def main(options):
     # Quietly skip this combination (experimental agent 2 does not accept softmax policy)
-    if options.agent.startswith("experimental2") and options.policy.startswith("softmax"):
+    if (options.agent.startswith("experimental2") or options.agent.startswith("exp3")) and options.policy.startswith("softmax"):
         return
 
     np.random.seed(options.seed)
@@ -30,6 +30,8 @@ def main(options):
     elif options.environment == "pdbandit":
         assert options.arms == 2
         env = environments.PolicyDependentBanditEnvironment()
+    elif options.environment == "switching":
+        env = environments.SwitchingAdversaryEnvironment(options.arms, num_steps // 2)
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
@@ -44,6 +46,8 @@ def main(options):
         agent = agents.QLearningAgent(options.arms, policy_function, options.learning_rate)
     elif options.agent.startswith("bayesian"):
         agent = agents.BayesianAgent(options.arms, policy_function)
+    elif options.agent.startswith("exp3"):
+        agent = agents.EXP3Agent(options.arms)
     elif options.agent.startswith("experimental1"):
         agent = agents.ExperimentalAgent1(options.arms, policy_function, options.learning_rate)
     elif options.agent.startswith("experimental2"):

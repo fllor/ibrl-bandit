@@ -160,7 +160,7 @@ class SwitchingAdversaryEnvironment(BaseEnvironment):
         # At switch_at, the 'best' arm moves to the other side
         if self.step == self.switch_at:
             self.values = np.zeros((self.num_arms,))
-            self.values[0] = 1.0 # Move reward to the last arm
+            self.values[-1] = 1.0 # Move reward to the last arm
 
         return np.random.normal(self.values[action], 0.1)
 
