@@ -2,7 +2,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def sample_action(policy: NDArray[np.float64]) -> int:
+def sample_action(rng : np.random.Generator, policy: NDArray[np.float64]) -> int:
     """
     Sample an action from a given policy
 
@@ -13,4 +13,4 @@ def sample_action(policy: NDArray[np.float64]) -> int:
         index of action
     """
     policy /= policy.sum()  # for numerics
-    return np.random.choice(len(policy), p=policy)
+    return rng.choice(len(policy), p=policy)

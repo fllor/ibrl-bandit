@@ -1,7 +1,7 @@
 ENVS=bandit newcomb damascus asymmetric-damascus coordination pdbandit switching
 AGENTS=classical bayesian exp3 experimental1 experimental2
 POLICIES=epsilon softmax
-OPTIONS_BASE=--steps 1001 --runs 2000
+OPTIONS_BASE=--steps 1001 --runs 1000
 OPTIONS_bandit=--arms 10
 ALL=$(foreach env,$(ENVS),$(foreach agent,$(AGENTS),figures/$(env).$(agent).png))
 ALL:=$(filter-out figures/bandit.experimental2.png,$(ALL))

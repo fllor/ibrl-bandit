@@ -34,11 +34,10 @@ def parse_argument_string(string : str) -> tuple[str, dict[str, float]]:
             args_dict[arg_name] = float(arg_val)
         else:
             args_dict[arg_name] = tuple(map(float, arg_val.split(":")))
-    print(string, "->", name,args_dict)
     return name, args_dict
 
 
-def construct_agent(string : str, num_actions : int) -> agents.BaseAgent:
+def construct_agent(string : str, options : dict[str,int]) -> agents.BaseAgent:
     """
     Construct agent from a given string, possibly including agent-specific options
     """
@@ -51,67 +50,67 @@ def construct_agent(string : str, num_actions : int) -> agents.BaseAgent:
         "experimental2":    agents.ExperimentalAgent2
     }
 
-    name, args = parse_argument_string(string)
-    if name in agent_types:
-        return agent_types[name](num_actions, **args)
+    name, kwargs = parse_argument_string(string)
+    if name not in agent_types:
+        raise RuntimeError("Invalid agent type: " + name)
 
-    raise RuntimeError("Invalid agent type: " + name)
+    arguments = dict()
+    arguments.update(options)
+    arguments.update(kwargs)
+    arguments.pop("num_steps")
+    arguments.pop("num_runs")
+    return agent_types[name](**arguments)
 
 
-def main(options):
-    ## Quietly skip this combination (experimental agent 2 does not accept softmax policy)
-    #if (options.agent.startswith("experimental2") or options.agent.startswith("exp3")) and options.policy.startswith("softmax"):
-    #    return
+def construct_environment(string : str, options : dict[str,int]) -> environments.BaseEnvironment:
+    """
+    Construct environment from a given string, possibly including environment-specific options
+    """
 
-    np.random.seed(options.seed)
-    num_steps = options.steps
-    num_runs = options.runs
-    if options.environment == "bandit":
-        env = environments.BanditEnvironment(options.arms)
-    elif options.environment == "newcomb":
-        assert options.arms == 2
-        env = environments.NewcombEnvironment()
-    elif options.environment == "damascus":
-        assert options.arms == 2
-        env = environments.DeathInDamascusEnvironment()
-    elif options.environment == "asymmetric-damascus":
-        assert options.arms == 2
-        env = environments.AsymmetricDeathInDamascusEnvironment()
-    elif options.environment == "coordination":
-        assert options.arms == 2
-        env = environments.CoordinationGameEnvironment()
-    elif options.environment == "pdbandit":
-        assert options.arms == 2
-        env = environments.PolicyDependentBanditEnvironment()
-    elif options.environment == "switching":
-        env = environments.SwitchingAdversaryEnvironment(options.arms, num_steps // 2)
-    else:
+    environment_types = {
+        "bandit":               environments.BanditEnvironment,
+        "switching":            environments.SwitchingAdversaryEnvironment,
+        "newcomb":              environments.NewcombEnvironment,
+        "damascus":             environments.DeathInDamascusEnvironment,
+        "asymmetric-damascus":  environments.AsymmetricDeathInDamascusEnvironment,
+        "coordination":         environments.CoordinationGameEnvironment,
+        "pdbandit":             environments.PolicyDependentBanditEnvironment,
+    }
+
+    name, kwargs = parse_argument_string(string)
+    if name not in environment_types:
         raise RuntimeError("Invalid environment: " + options.environment)
 
-    #if options.policy.startswith("epsilon"):
-    #    policy_function = agents.epsilon_greedy
-    #elif options.policy.startswith("softmax"):
-    #    policy_function = agents.softmax
-    #else:
-    #    raise RuntimeError("Invalid policy type: " + options.agent)
+    arguments = dict()
+    arguments.update(options)
+    arguments.update(kwargs)
+    return environment_types[name](**arguments)
 
-    agent = construct_agent(options.agent, options.arms)
+
+def simulate(
+        env : environments.BaseEnvironment,
+        agent : agents.BaseAgent,
+        options : dict):
+    base_rng = np.random.default_rng(options["seed"])
+    num_steps = options["num_steps"]
+    num_runs = options["num_runs"]
+    verbose = options["verbose"]
 
     average_reward = np.zeros((num_steps,))
     average_reward_sq = np.zeros((num_steps,))
-    best_reward = 0
+    optimal_reward = 0
     for r in range(num_runs):
-        if options.verbose > 0:
-            print(f"Run {r+1}/{num_runs}")
+        #if verbose > 0:
+        #    print(f"Run {r+1}/{num_runs}")
         env.reset()
         agent.reset()
-        best_reward += env.get_optimal_reward()
+        optimal_reward += env.get_optimal_reward()
         for i in range(num_steps):
             policy = agent.get_policy()
-            action = utils.sample_action(policy)
+            action = utils.sample_action(base_rng, policy)
             reward = env.interact(action, policy)
-            if options.verbose > 0:
-                print(i, action, reward, policy.tolist(), agent.q.tolist())
+            #if verbose > 0:
+            #    print(i, action, reward, policy.tolist(), agent.q.tolist())
             agent.update(policy, action, reward)
             average_reward[i] += reward
             average_reward_sq[i] += reward**2
@@ -120,12 +119,12 @@ def main(options):
     average_reward_sq /= num_runs
     average_reward_spread = np.sqrt(average_reward_sq - average_reward**2)
     average_reward_unc = average_reward_spread / np.sqrt(num_runs)
-    best_reward /= num_runs
+    optimal_reward /= num_runs
 
     for i in range(num_steps):
         print(
             i,
-            best_reward,                # Best possible reward (as determined by environment)
+            optimal_reward,             # Expected reward when using optimal policy (as determined by environment)
             average_reward[i],          # Average reward received by agent
             average_reward_unc[i],      # Uncertainty of reward (converges to 0 as num_runs goes to infinity)
             average_reward_spread[i],   # Spread of reward (converges to constant)
@@ -141,5 +140,14 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--runs",         help="Number of episodes to run",   type=int,       default=1)
     parser.add_argument(      "--seed",         help="Random number seed",          type=int,       default=42)
     parser.add_argument("-v", "--verbose",      help="Debug output",                action="count", default=0)
-    options = parser.parse_args()
-    main(options)
+    parsed_args = parser.parse_args()
+    options = {
+        "num_actions": parsed_args.arms,
+        "num_steps":   parsed_args.steps,
+        "num_runs":    parsed_args.runs,
+        "seed":        parsed_args.seed,
+        "verbose":     parsed_args.verbose
+    }
+    env = construct_environment(parsed_args.environment, options)
+    agent = construct_agent(parsed_args.agent, options)
+    simulate(env, agent, options)

@@ -7,14 +7,25 @@ import utils
 class BaseAgent(ABC):
     """
     Base class for all agents
+
+    Arguments:
+        num_actions: Number of discrete actions
+        seed:        Seed for random number generator
+        verbose:     Request debugging output
     """
-    def __init__(self, num_actions : int):
+    def __init__(self,
+            num_actions : int,
+            *,
+            seed : int = 42,
+            verbose : int = 0):
         """
         Initialise permanent state
         Must call reset() before initial interaction with environment
         """
-        assert num_actions >= 2
+        assert isinstance(num_actions,int) and num_actions >= 2
         self.num_actions = num_actions
+        self.seed = seed
+        self.verbose = verbose
 
     @abstractmethod
     def get_policy(self) -> NDArray[np.float64]:
@@ -41,6 +52,8 @@ class BaseAgent(ABC):
         Called before interacting with a new environment
         """
         self.step = 1
+        self.seed += 1
+        self.random = np.random.default_rng(seed = self.seed)
 
 
 class GreedyAgent(BaseAgent):
@@ -176,7 +189,7 @@ class ExperimentalAgent1(QLearningAgent):
     """
     def get_policy(self) -> NDArray[np.float64]:
         proto_policy = super().get_policy()
-        action = utils.sample_action(proto_policy)
+        action = utils.sample_action(self.random, proto_policy)
         policy = np.zeros((self.num_actions,))
         policy[action] = 1
         return policy
@@ -211,10 +224,10 @@ class ExperimentalAgent2(GreedyAgent):
     def get_policy(self) -> NDArray[np.float64]:
         epsilon = self.parse_parameter(self.epsilon)
 
-        if np.random.binomial(1, epsilon):
+        if self.random.binomial(1, epsilon):
             # exploration: pick a strongly peaked policy (with random peak)
             exploration = np.ones((self.num_actions,))
-            exploration[np.random.randint(self.num_actions)] += self.exploration_peak
+            exploration[self.random.integers(self.num_actions)] += self.exploration_peak
             exploration /= exploration.sum()
             return exploration
         else:
@@ -247,13 +260,17 @@ class ExperimentalAgent2(GreedyAgent):
 
 
 class EXP3Agent(BaseAgent):
-    def __init__(self, num_actions : int, gamma : float = 0.1, max_reward : float = 1):
-        self.num_actions = num_actions
+    def __init__(self, *args,
+            gamma : float = 0.1,
+            max_reward : float = 1,
+            **kwargs):
+        super().__init__(*args, **kwargs)
         self.gamma = gamma
         self.max_reward = max_reward
-        self.eta = gamma / num_actions
+        self.eta = gamma / self.num_actions
 
     def reset(self):
+        super().reset()
         # We store weights in log-space for numerical stability
         # log(1.0) = 0
         self.log_weights = np.zeros(self.num_actions)
@@ -263,16 +280,18 @@ class EXP3Agent(BaseAgent):
         return self.probs
 
     def update(self, policy : NDArray[np.float64], action : int, reward : float):
+        super().update(policy, action, reward)
+
         # 1. Internal scaling ensures the math stays in the [0, 1] 'safe zone'
         scaled_reward = reward / self.max_reward
         
         # 2. Importance Sampling
         # This prevents the update from becoming too large if probs[a] is small
         estimated_reward = scaled_reward / self.probs[action]
-        
+
         # 3. Update log-weights using the learning rate (eta)
         self.log_weights[action] += self.eta * estimated_reward
-        
+
         # 4. Numerically stable softmax
         weights = np.exp(self.log_weights - np.max(self.log_weights))
         self.probs = (1 - self.gamma) * (weights / np.sum(weights)) + (self.gamma / self.num_actions)
