@@ -22,7 +22,7 @@ class BaseEnvironment(ABC):
             num_steps : int = None,
             num_runs : int = None,
             *,
-            seed : int = 42,
+            seed : int = 0x89abcdef,  # Default needs to be different from agent
             verbose : int = 0):
         """
         Initialise permanent state
@@ -35,16 +35,27 @@ class BaseEnvironment(ABC):
         self.seed = seed
         self.verbose = verbose
 
-    @abstractmethod
-    def interact(self, action : int, policy : NDArray[np.float64] = None) -> float:
+    def predict(self, probabilities : NDArray[np.float64]) -> None:
         """
-        Let the predictor act, based on the given policy.
-        Compute the reward corresponding to the agent's action.
-        (Conceptually, these are two distinct steps)
+        Let the predictor set up the environment. The predictor has access to the probability distribution from which
+        the agent samples its actions, but not the action itself. The predictor may adjust rewards or otherwise modify
+        the environment based on this distribution.
 
         Arguments:
-            policy: Policy chosen by the agent
-            action: Action sampled from the policy
+            probabilities: Probability distribution for actions by the agent
+        """
+        pass
+
+    @abstractmethod
+    def interact(self, action : int) -> float:
+        """
+        Perform the interaction of the agent with the environment, based on the action chosen by the agent.
+        The interaction is purely classical, i.e. it does not depend on the agent's policy. Potential policy-dependence
+        arises when the predictor sets up the environment prior to the interaction.
+        hand
+
+        Arguments:
+            action: Action chosen by the agent
         
         Returns:
             reward of the interaction
@@ -77,7 +88,7 @@ class BanditEnvironment(BaseEnvironment):
     according to a normal distribution centred on the average value.
     Upon initialisation, the average rewards are sampled from a standard normal distribution.
     """
-    def interact(self, action : int, policy : NDArray[np.float64]) -> float:
+    def interact(self, action : int) -> float:
         return self.random.normal(self.rewards[action], 1)
 
     def get_optimal_reward(self) -> int:
@@ -106,9 +117,12 @@ class NewcombLikeEnvironment(BaseEnvironment):
         assert self.num_actions == len(reward_table)
         self.reward_table = np.array(reward_table)
 
-    def interact(self, action : int, policy) -> float:
-        prediction = utils.sample_action(self.random, policy)
-        return self.reward_table[prediction,action]
+    def predict(self, probabilities : NDArray[np.float64]):
+        prediction = utils.sample_action(self.random, probabilities)
+        self.rewards = self.reward_table[prediction,:]
+
+    def interact(self, action : int) -> float:
+        return self.rewards[action]
 
     def get_optimal_reward(self) -> int:
         # Compute the optimal reward, based on the full reward table
@@ -190,10 +204,10 @@ class SwitchingAdversaryEnvironment(BaseEnvironment):
         if switch_at is None:
             if self.num_steps is None:
                 raise RuntimeError("SwitchingAdversaryEnvironment: require either switch_at or num_steps argument")
-            switch_at = self.num_steps//2
+            switch_at = self.num_steps // 2
         self.switch_at = switch_at
 
-    def interact(self, action : int, policy : NDArray[np.float64]) -> float:
+    def interact(self, action : int) -> float:
         self.step += 1
 
         # At switch_at, the 'best' arm moves to the other side

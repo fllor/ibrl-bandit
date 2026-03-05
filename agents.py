@@ -16,7 +16,7 @@ class BaseAgent(ABC):
     def __init__(self,
             num_actions : int,
             *,
-            seed : int = 42,
+            seed : int = 0x01234567,  # Default needs to be different from environment
             verbose : int = 0):
         """
         Initialise permanent state
@@ -28,21 +28,21 @@ class BaseAgent(ABC):
         self.verbose = verbose
 
     @abstractmethod
-    def get_policy(self) -> NDArray[np.float64]:
+    def get_probabilities(self) -> NDArray[np.float64]:
         """
-        Return the policy for the next episode.
-        A policy is represented as a probability distribution of possible actions.
+        Return the probability distribution to be used in the next episode. Action are sampled from this distribution.
+        The distribution thus fixes the entire behaviour of the agent during the episode.
         """
         pass
 
-    def update(self, policy : NDArray[np.float64], action : int, reward : float) -> None:
+    def update(self, probabilities : NDArray[np.float64], action : int, reward : float) -> None:
         """
         Update internal state based on outcome of the episode
 
         Arguments:
-            policy: The policy chosen by the agent
-            action: The action selected from the policy
-            reward: The reward received
+            probabilities: The policy chosen by the agent
+            action:        The action selected from the policy
+            reward:        The reward received
         """
         self.step += 1
 
@@ -87,9 +87,9 @@ class GreedyAgent(BaseAgent):
         self.decay_type = int(decay_type)
         assert self.decay_type in [0,1]
 
-    def get_greedy_policy(self, values : NDArray[np.float64]) -> NDArray[np.float64]:
+    def build_greedy_policy(self, values : NDArray[np.float64]) -> NDArray[np.float64]:
         """
-        Construct policy based on given reward estimates and selected algorithm
+        Construct probabilities based on given reward estimates and selected policy
         """
         if self.epsilon is not None:
             return self.build_epsilon_greedy_policy(values)
@@ -145,11 +145,11 @@ class QLearningAgent(GreedyAgent):
 
         self.learning_rate = learning_rate
 
-    def get_policy(self) -> NDArray[np.float64]:
-        return self.get_greedy_policy(self.q)
+    def get_probabilities(self) -> NDArray[np.float64]:
+        return self.build_greedy_policy(self.q)
 
-    def update(self, policy : NDArray[np.float64], action : int, reward : float):
-        super().update(policy, action, reward)
+    def update(self, probabilities : NDArray[np.float64], action : int, reward : float):
+        super().update(probabilities, action, reward)
         self.q[action] += self.learning_rate * (reward - self.q[action])
 
     def reset(self):
@@ -165,11 +165,11 @@ class BayesianAgent(GreedyAgent):
     Update this estimate at each iteration based on the observed information.
     Picks the action with the largest expected reward.
     """
-    def get_policy(self) -> NDArray[np.float64]:
-        return self.get_greedy_policy(self.values)
+    def get_probabilities(self) -> NDArray[np.float64]:
+        return self.build_greedy_policy(self.values)
 
-    def update(self, policy : NDArray[np.float64], action : int, reward : float):
-        super().update(policy, action, reward)
+    def update(self, probabilities : NDArray[np.float64], action : int, reward : float):
+        super().update(probabilities, action, reward)
         # Estimate reward of the action and its uncertainty based on observed reward and priors
         # Define precision, tau, as 1/sigma^2 to avoid vanishing sigma precision issues
         self.values[action] = (self.precision[action] * self.values[action] + reward) / (self.precision[action] + 1.0)
@@ -183,33 +183,31 @@ class BayesianAgent(GreedyAgent):
 
 class ExperimentalAgent1(QLearningAgent):
     """
-    Instead of using the non-deterministic policy from Q-learning, sample an
-    action from this policy and return a deterministic policy that chooses this
-    action. Consequently, we only access the diagonal of the reward matrix.
+    Instead of using the non-deterministic probability distribution from Q-learning, sample an action from it and
+    return a deterministic distribution that chooses this action.
+    Consequently, we only access the diagonal of the reward matrix.
     """
-    def get_policy(self) -> NDArray[np.float64]:
-        proto_policy = super().get_policy()
-        action = utils.sample_action(self.random, proto_policy)
-        policy = np.zeros((self.num_actions,))
-        policy[action] = 1
-        return policy
+    def get_probabilities(self) -> NDArray[np.float64]:
+        proto_probabilities = super().get_probabilities()
+        action = utils.sample_action(self.random, proto_probabilities)
+        probabilities = np.zeros((self.num_actions,))
+        probabilities[action] = 1
+        return probabilities
 
 
 class ExperimentalAgent2(GreedyAgent):
     """
     Reconstruct full reward matrix
 
-    This is achieved by sometimes picking a strongly peaked policy, such that
-    we can be fairly certain what the predictor predicted. When we update, we
-    know the actual action and the predicted action and are therefore able to
-    update the correct entry of the reward matrix.
-    Even with a strongly peaked policy, we will sometimes not chose the most
-    likely action. This allows us to access the off-diagonal entries. As this
-    rarely happens, learning the off-diagonal rewards is relatively slow. To
+    This is achieved by sometimes picking a strongly peaked probability distribution, such that we can be fairly
+    certain about what the predictor predicted. When we update, we know the actual action and the predicted action
+    and are therefore able to update the correct entry of the reward matrix.
+    Even with a strongly peaked distribution, we will sometimes not chose the most likely action. This allows us to
+    access the off-diagonal entries. As this rarely happens, learning the off-diagonal rewards is relatively slow. To
     speed up learning, we use sample averages, rather than Q-learning.
 
-    When exploiting, we compute the optimal policy based on the current estimate
-    of the reward matrix. This policy may be non-deterministic.
+    When exploiting, we compute the optimal distribution based on the current estimate of the reward matrix. This
+    distribution may be non-deterministic.
     """
     def __init__(self, *args,
             learning_rate : float = 0.1,
@@ -218,14 +216,14 @@ class ExperimentalAgent2(GreedyAgent):
         super().__init__(*args, **kwargs)
         assert self.num_actions == 2  # technical limitation for now
         self.learning_rate = learning_rate
-        self.update_threshold = 0.9 # minimum peak in policy to be considered for update
+        self.update_threshold = 0.9 # minimum probability to be considered for update
         self.exploration_peak = 20  # how strongly peaked should exploration policies be
 
-    def get_policy(self) -> NDArray[np.float64]:
+    def get_probabilities(self) -> NDArray[np.float64]:
         epsilon = self.parse_parameter(self.epsilon)
 
         if self.random.binomial(1, epsilon):
-            # exploration: pick a strongly peaked policy (with random peak)
+            # exploration: pick a strongly peaked distribution (with random peak)
             exploration = np.ones((self.num_actions,))
             exploration[self.random.integers(self.num_actions)] += self.exploration_peak
             exploration /= exploration.sum()
@@ -237,21 +235,22 @@ class ExperimentalAgent2(GreedyAgent):
                 (1, a), # always pick action 0
                 (0, d)  # always pick action 1
             ]
-            if (a+d-b-c) < 0 and 0 < (b+c-2*d)/(b+c-a-d)/2 < 1: # mixed strategy
+            if (a+d-b-c) < 0 and (b+c-a-d) != 0 and 0 < (b+c-2*d)/(b+c-a-d)/2 < 1: # mixed strategy
                 strategies.append(((b+c-2*d)/(b+c-a-d)/2, (a*d-(b+c)**2/4)/(a+d-b-c)))
             p0 = max(strategies, key=lambda strategy: strategy[1])[0]
             return np.array([p0, 1-p0], dtype=np.float64)
 
-    def update(self, policy : NDArray[np.float64], action : int, reward : float):
-        super().update(policy, action, reward)
-        prediction = policy.argmax()
-        # only update action for which policy is strongly peaked, i.e. we can be fairly certain that the predictor chose this action
-        if policy[prediction] < self.update_threshold:
+    def update(self, probabilities : NDArray[np.float64], action : int, reward : float):
+        super().update(probabilities, action, reward)
+        prediction = probabilities.argmax()
+        # only update action for which distribution is strongly peaked,
+        # i.e. when we can be fairly certain that the predictor chose this action
+        if probabilities[prediction] < self.update_threshold:
             return
-        # updates are weighted by the corresponding policy entry
-        self.counts[prediction,action] += policy[prediction]
-        self.q[prediction,action] += policy[prediction] * (reward - self.q[prediction,action]) / self.counts[prediction,action]
-        #self.q[prediction,action] += policy[prediction] * self.learning_rate * (reward - self.q[prediction,action])
+        # updates are weighted by the corresponding probability
+        self.counts[prediction,action] += probabilities[prediction]
+        self.q[prediction,action] += probabilities[prediction] * (reward - self.q[prediction,action]) / self.counts[prediction,action]
+        #self.q[prediction,action] += probabilities[prediction] * self.learning_rate * (reward - self.q[prediction,action])
 
     def reset(self):
         super().reset()
@@ -276,11 +275,11 @@ class EXP3Agent(BaseAgent):
         self.log_weights = np.zeros(self.num_actions)
         self.probs = np.ones(self.num_actions) / self.num_actions
 
-    def get_policy(self):
+    def get_probabilities(self):
         return self.probs
 
-    def update(self, policy : NDArray[np.float64], action : int, reward : float):
-        super().update(policy, action, reward)
+    def update(self, probabilities : NDArray[np.float64], action : int, reward : float):
+        super().update(probabilities, action, reward)
 
         # 1. Internal scaling ensures the math stays in the [0, 1] 'safe zone'
         scaled_reward = reward / self.max_reward
