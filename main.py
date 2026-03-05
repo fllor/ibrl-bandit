@@ -4,11 +4,64 @@ import agents
 import environments
 import utils
 
+def parse_argument_string(string : str) -> tuple[str, dict[str, float]]:
+    """
+    Parse a string that optionally includes arguments.
+
+    Input syntax:
+        No arguments:       <string>
+        Single argument:    <string>:<arg1>=<val1>
+        Multiple arguments: <string>:<arg1>=<val1>,<arg2>=<val2>,...
+
+    All argument values should either be floats, or tuples of floats separated by ":"
+
+    Returns a tuple consisting of:
+        the base string
+        a dict of all options
+
+    Example:
+        string = "base:opt1=1,opt2=2:0.5"
+    ->  "base",{"opt1":1.,"opt2":(2,0.5)}
+    """
+    if ":" not in string:
+        return string, dict()
+
+    name,args_str = string.split(":",1)
+    args_dict = dict()
+    for arg in args_str.split(","):
+        arg_name,arg_val = arg.split("=",1)
+        if ":" not in arg_val:
+            args_dict[arg_name] = float(arg_val)
+        else:
+            args_dict[arg_name] = tuple(map(float, arg_val.split(":")))
+    print(string, "->", name,args_dict)
+    return name, args_dict
+
+
+def construct_agent(string : str, num_actions : int) -> agents.BaseAgent:
+    """
+    Construct agent from a given string, possibly including agent-specific options
+    """
+
+    agent_types = {
+        "classical":        agents.QLearningAgent,
+        "bayesian":         agents.BayesianAgent,
+        "exp3":             agents.EXP3Agent,
+        "experimental1":    agents.ExperimentalAgent1,
+        "experimental2":    agents.ExperimentalAgent2
+    }
+
+    name, args = parse_argument_string(string)
+    if name in agent_types:
+        return agent_types[name](num_actions, **args)
+
+    raise RuntimeError("Invalid agent type: " + name)
+
 
 def main(options):
-    # Quietly skip this combination (experimental agent 2 does not accept softmax policy)
-    if (options.agent.startswith("experimental2") or options.agent.startswith("exp3")) and options.policy.startswith("softmax"):
-        return
+    ## Quietly skip this combination (experimental agent 2 does not accept softmax policy)
+    #if (options.agent.startswith("experimental2") or options.agent.startswith("exp3")) and options.policy.startswith("softmax"):
+    #    return
 
     np.random.seed(options.seed)
     num_steps = options.steps
@@ -35,25 +88,14 @@ def main(options):
     else:
         raise RuntimeError("Invalid environment: " + options.environment)
 
-    if options.policy.startswith("epsilon"):
-        policy_function = agents.epsilon_greedy
-    elif options.policy.startswith("softmax"):
-        policy_function = agents.softmax
-    else:
-        raise RuntimeError("Invalid policy type: " + options.agent)
+    #if options.policy.startswith("epsilon"):
+    #    policy_function = agents.epsilon_greedy
+    #elif options.policy.startswith("softmax"):
+    #    policy_function = agents.softmax
+    #else:
+    #    raise RuntimeError("Invalid policy type: " + options.agent)
 
-    if options.agent.startswith("classical"):
-        agent = agents.QLearningAgent(options.arms, policy_function, options.learning_rate)
-    elif options.agent.startswith("bayesian"):
-        agent = agents.BayesianAgent(options.arms, policy_function)
-    elif options.agent.startswith("exp3"):
-        agent = agents.EXP3Agent(options.arms)
-    elif options.agent.startswith("experimental1"):
-        agent = agents.ExperimentalAgent1(options.arms, policy_function, options.learning_rate)
-    elif options.agent.startswith("experimental2"):
-        agent = agents.ExperimentalAgent2(options.arms, options.learning_rate)
-    else:
-        raise RuntimeError("Invalid agent type: " + options.agent)
+    agent = construct_agent(options.agent, options.arms)
 
     average_reward = np.zeros((num_steps,))
     average_reward_sq = np.zeros((num_steps,))
@@ -94,9 +136,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="RL test with multi-armed bandit")
     parser.add_argument("environment",          help="Environment type",            type=str)
     parser.add_argument("agent",                help="Agent type",                  type=str)
-    parser.add_argument("-p", "--policy",       help="Method to build policy",      type=str,       default="epsilon-greedy")
     parser.add_argument("-k", "--arms",         help="Number of arms",              type=int,       default=2)
-    parser.add_argument("-l", "--learning-rate",help="Learning rate",               type=float,     default=0.1)
     parser.add_argument("-s", "--steps",        help="Number of steps per episode", type=int,       default=1001)
     parser.add_argument("-r", "--runs",         help="Number of episodes to run",   type=int,       default=1)
     parser.add_argument(      "--seed",         help="Random number seed",          type=int,       default=42)

@@ -4,29 +4,18 @@ from numpy.typing import NDArray
 import utils
 
 
-def epsilon_greedy(q, num_actions, step):
-    # Exploitation: uniformly chose among the actions with highest value
-    best_actions = (q == q.max())
-    exploit = np.ones((num_actions,))*best_actions / best_actions.sum()
-
-    # Exploration: uniformly pick any action
-    explore = np.ones((num_actions,))/num_actions
-
-    # epsilon-greedy policy with decaying epsilon
-    epsilon = max(0.01, 0.5 / (step ** 0.5))
-    return exploit * (1 - epsilon) + explore * epsilon
-
-def softmax(q, num_actions, step):
-    # Softmax of Q-values with decaying temperature
-    temperature = max(0.05, 1.0 / (step ** 0.3))
-
-    # Numerically stable softmax
-    q_shifted = q - q.max()
-    exp_q = np.exp(q_shifted / temperature)
-    return exp_q / exp_q.sum()
-
-
 class BaseAgent(ABC):
+    """
+    Base class for all agents
+    """
+    def __init__(self, num_actions : int):
+        """
+        Initialise permanent state
+        Must call reset() before initial interaction with environment
+        """
+        assert num_actions >= 2
+        self.num_actions = num_actions
+
     @abstractmethod
     def get_policy(self) -> NDArray[np.float64]:
         """
@@ -44,74 +33,139 @@ class BaseAgent(ABC):
             action: The action selected from the policy
             reward: The reward received
         """
-        pass
+        self.step += 1
 
     def reset(self) -> None:
         """
         Reset internal state
+        Called before interacting with a new environment
         """
-        pass
+        self.step = 1
 
 
-class QLearningAgent(BaseAgent):
+class GreedyAgent(BaseAgent):
+    """
+    Base class for agents that use either an epsilon-greedy or softmax policy to encourage exploration.
+
+    Arguments:
+        epsilon:        For epsilon-greedy policy
+        temperature:    For softmax policy
+        decay_type:     Select formula for decreasing rate (0: exponential, 1: linear)
+
+    Both epsilon and temperature can be either a fixed float or a tuple (start,decay constant,min) for decreasing exploration.
+    """
+    def __init__(self, *args,
+            epsilon     : float | tuple[float] | None = None,
+            temperature : float | tuple[float] | None = None,
+            decay_type  : float = 0,
+            **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if epsilon is not None and temperature is not None:
+            raise RuntimeError("Cannot specify both epsilon and temperature")
+        if epsilon is None and temperature is None:
+            epsilon = 0.1  # default value
+
+        assert epsilon is None or isinstance(epsilon,float) or (isinstance(epsilon,tuple) and len(epsilon)==3)
+        assert temperature is None or isinstance(temperature,float) or (isinstance(temperature,tuple) and len(temperature)==3)
+
+        self.epsilon = epsilon
+        self.temperature = temperature
+        self.decay_type = int(decay_type)
+        assert self.decay_type in [0,1]
+
+    def get_greedy_policy(self, values : NDArray[np.float64]) -> NDArray[np.float64]:
+        """
+        Construct policy based on given reward estimates and selected algorithm
+        """
+        if self.epsilon is not None:
+            return self.build_epsilon_greedy_policy(values)
+        if self.temperature is not None:
+            return self.build_softmax_policy(values)
+        raise RuntimeError("Invalid state")
+
+    def build_epsilon_greedy_policy(self, values : NDArray[np.float64]) -> NDArray[np.float64]:
+        # Exploitation: sample uniformly across actions with highest value
+        best_actions = (values == values.max())
+        exploit = np.ones_like(values)*best_actions / best_actions.sum()
+
+        # Exploration: sample uniformly across all actions
+        explore = np.ones_like(values) / self.num_actions
+
+        epsilon = self.parse_parameter(self.epsilon)
+        return (1 - epsilon) * exploit + epsilon * explore
+
+    def build_softmax_policy(self, values : NDArray[np.float64]) -> NDArray[np.float64]:
+        temperature = self.parse_parameter(self.temperature)
+
+        # Numerically stable softmax
+        exp = np.exp((values - values.max()) / temperature)
+        return exp / exp.sum()
+
+    def parse_parameter(self, parameter : float | tuple[float]) -> float:
+        """
+        Parse exploration parameter (epsilon or temperature)
+        Parameter may either be a fixed value or tuple specifying temporal decay
+        """
+        if isinstance(parameter,float):
+            return parameter
+        if self.decay_type == 0:  # exponential decay
+            start,rate,end = parameter
+            return max(start / (self.step ** rate), end)
+        if self.decay_type == 1:  # linear decay
+            start,last_step,end = parameter
+            return end if self.step>=last_step else (start + (end-start) * (self.step / last_step))
+        raise RuntimeError("Invalid state")
+
+
+class QLearningAgent(GreedyAgent):
     """
     Classical Q-learning agent that interacts with a multi-armed bandit
 
     Arguments:
-        num_actions:     Number of possible action in environment
-        policy_function: Function to build policy from Q-values
-        learning_rate:   Learning rate for Q-learning
+        learning_rate:  Learning rate for Q-learning
     """
-    def __init__(self, num_actions : int, policy_function : callable, learning_rate : float = 0.1):
-        self.num_actions = num_actions
-        self.policy_function = policy_function
+    def __init__(self, *args,
+            learning_rate : float = 0.1,
+            **kwargs):
+        super().__init__(*args, **kwargs)
+
         self.learning_rate = learning_rate
 
     def get_policy(self) -> NDArray[np.float64]:
-        self.step += 1
-        return self.policy_function(self.q, self.num_actions, self.step)
+        return self.get_greedy_policy(self.q)
 
     def update(self, policy : NDArray[np.float64], action : int, reward : float):
+        super().update(policy, action, reward)
         self.q[action] += self.learning_rate * (reward - self.q[action])
 
     def reset(self):
+        super().reset()
         self.q = np.zeros((self.num_actions,))
-        self.step = 0
 
 
-class BayesianAgent(BaseAgent):
+class BayesianAgent(GreedyAgent):
     """
     Agent using Bayesian inference
 
-    For each action it estimates a normal distribution and the picks the action with the largest central value
-    Use epsilon-greedy policy to balance continuous exploration
-    Optionally start with optimism to encourage early exploration
+    For each action, keep track of a normal distribution that corresponds to the uncertainty of the associated reward.
+    Update this estimate at each iteration based on the observed information.
+    Picks the action with the largest expected reward.
     """
-    def __init__(self, num_actions : int, policy_function : callable):
-        self.num_actions = num_actions
-        self.policy_function = policy_function
-
     def get_policy(self) -> NDArray[np.float64]:
-        self.step += 1
-        return self.policy_function(self.values, self.num_actions, self.step)
+        return self.get_greedy_policy(self.values)
 
     def update(self, policy : NDArray[np.float64], action : int, reward : float):
+        super().update(policy, action, reward)
         # Estimate reward of the action and its uncertainty based on observed reward and priors
         # Define precision, tau, as 1/sigma^2 to avoid vanishing sigma precision issues
         self.values[action] = (self.precision[action] * self.values[action] + reward) / (self.precision[action] + 1.0)
         self.precision[action] += 1
 
     def reset(self):
-        self.step = 0
+        super().reset()
         self.values = np.zeros(self.num_actions)
         self.precision = np.ones(self.num_actions) * 0.1
-
-
-#class BayesianThompsonAgent(BayesianAgent):
-#    def get_policy(self) -> NDArray[np.float64]:
-#        std_devs = 1.0 / np.sqrt(self.precision)
-#        samples = np.random.normal(self.values, std_devs)
-#        return samples.argmax()
 
 
 class ExperimentalAgent1(QLearningAgent):
@@ -128,7 +182,7 @@ class ExperimentalAgent1(QLearningAgent):
         return policy
 
 
-class ExperimentalAgent2(BaseAgent):
+class ExperimentalAgent2(GreedyAgent):
     """
     Reconstruct full reward matrix
 
@@ -144,18 +198,18 @@ class ExperimentalAgent2(BaseAgent):
     When exploiting, we compute the optimal policy based on the current estimate
     of the reward matrix. This policy may be non-deterministic.
     """
-    def __init__(self, k : int, learning_rate : float = 0.1):
-        assert k == 2  # technical limitation for now
-        self.num_actions = k
+    def __init__(self, *args,
+            learning_rate : float = 0.1,
+            **kwargs):
+        assert "temperature" not in kwargs or kwargs["temperature"] is None
+        super().__init__(*args, **kwargs)
+        assert self.num_actions == 2  # technical limitation for now
         self.learning_rate = learning_rate
         self.update_threshold = 0.9 # minimum peak in policy to be considered for update
         self.exploration_peak = 20  # how strongly peaked should exploration policies be
 
     def get_policy(self) -> NDArray[np.float64]:
-        self.step += 1
-        #epsilon = max(0.01, 0.5 / (self.step ** 0.5))  # default
-        epsilon = max(0.01, 0.5 - 0.49 * self.step/700)  # schedule with more exploration
-        #epsilon = 0.1  # fixed exploration
+        epsilon = self.parse_parameter(self.epsilon)
 
         if np.random.binomial(1, epsilon):
             # exploration: pick a strongly peaked policy (with random peak)
@@ -176,6 +230,7 @@ class ExperimentalAgent2(BaseAgent):
             return np.array([p0, 1-p0], dtype=np.float64)
 
     def update(self, policy : NDArray[np.float64], action : int, reward : float):
+        super().update(policy, action, reward)
         prediction = policy.argmax()
         # only update action for which policy is strongly peaked, i.e. we can be fairly certain that the predictor chose this action
         if policy[prediction] < self.update_threshold:
@@ -186,9 +241,9 @@ class ExperimentalAgent2(BaseAgent):
         #self.q[prediction,action] += policy[prediction] * self.learning_rate * (reward - self.q[prediction,action])
 
     def reset(self):
+        super().reset()
         self.counts = np.zeros((self.num_actions,self.num_actions))
         self.q = np.zeros((self.num_actions,self.num_actions))
-        self.step = 0
 
 
 class EXP3Agent(BaseAgent):

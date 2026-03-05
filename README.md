@@ -49,6 +49,11 @@ The experimental agent 1 is able to converge on the best deterministic policy. I
 For technical reasons, experimental agent 2 cannot yet operate in the bandit environment. In all other environment, it is able to converge on the optimal policy. Some fine-tuning of the meta-parameters was necessary, to get it to converge within 1000 steps. For the policy-dependent bandit the agent would require more episodes and exploration to converge to an optimal policy.
 
 ## Changelog and lessons learned
+### v3
+- Aiming to be the base of the common repository: https://github.com/SPAR-S26-IBRL-Stream/Project-Newcomb
+- Mo' agents, mo' problems (i.e. environments)
+- Improve code structure
+
 ### [v2](https://github.com/fllor/ibrl-bandit/tree/v2)
 - Remove Bayesian and Infrabayesian agents, as they are probably not doing what we want
 - Add two experimental agents, aiming to solve Newcomb-like environments
