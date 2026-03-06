@@ -1,12 +1,13 @@
 import numpy as np
-import agents
-import environments
-import utils
+
+from ..agents import BaseAgent
+from ..environments import BaseEnvironment
+from ..utils import sample_action
 
 
 def simulate(
-        env : environments.BaseEnvironment,
-        agent : agents.BaseAgent,
+        env : BaseEnvironment,
+        agent : BaseAgent,
         options : dict) -> dict:
     """
     Simulate interactions between agent and environment
@@ -38,7 +39,7 @@ def simulate(
         for i in range(num_steps):
             probabilities = agent.get_probabilities()
             env.predict(probabilities)
-            action = utils.sample_action(agent.random, probabilities)
+            action = sample_action(agent.random, probabilities)
             reward = env.interact(action)
             agent.update(probabilities, action, reward)
             average_reward[0,i] += reward

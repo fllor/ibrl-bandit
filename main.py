@@ -1,9 +1,8 @@
 import argparse
 import numpy as np
-import agents
-import environments
-import simulator
-import construction
+
+from ibrl.simulators import simulate
+from ibrl.utils import construct_environment,construct_agent
 
 
 if __name__ == "__main__":
@@ -24,9 +23,9 @@ if __name__ == "__main__":
         "seed":        parsed_args.seed,
         "verbose":     parsed_args.verbose
     }
-    env = construction.construct_environment(parsed_args.environment, options)
-    agent = construction.construct_agent(parsed_args.agent, options)
-    results = simulator.simulate(env, agent, options)
+    env = construct_environment(parsed_args.environment, options)
+    agent = construct_agent(parsed_args.agent, options)
+    results = simulate(env, agent, options)
 
     # Print average reward obtained (for plotting)
     average_reward = results["average_reward"]

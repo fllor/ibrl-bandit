@@ -1,5 +1,5 @@
-import agents
-import environments
+from .. import agents
+from .. import environments
 
 
 def parse_argument_string(string : str) -> tuple[str, dict[str, float]]:
@@ -52,11 +52,11 @@ def construct_agent(string : str, options : dict[str,int], seed_offset : int = 0
     """
 
     agent_types = {
-        "classical":        agents.QLearningAgent,
-        "bayesian":         agents.BayesianAgent,
-        "exp3":             agents.EXP3Agent,
-        "experimental1":    agents.ExperimentalAgent1,
-        "experimental2":    agents.ExperimentalAgent2
+        "classical":     agents.QLearningAgent,
+        "bayesian":      agents.BayesianAgent,
+        "exp3":          agents.EXP3Agent,
+        "experimental1": agents.ExperimentalAgent1,
+        "experimental2": agents.ExperimentalAgent2
     }
 
     name, kwargs = parse_argument_string(string)
@@ -91,13 +91,13 @@ def construct_environment(string : str, options : dict[str,int], seed_offset : i
     """
 
     environment_types = {
-        "bandit":               environments.BanditEnvironment,
-        "switching":            environments.SwitchingAdversaryEnvironment,
-        "newcomb":              environments.NewcombEnvironment,
-        "damascus":             environments.DeathInDamascusEnvironment,
-        "asymmetric-damascus":  environments.AsymmetricDeathInDamascusEnvironment,
-        "coordination":         environments.CoordinationGameEnvironment,
-        "pdbandit":             environments.PolicyDependentBanditEnvironment,
+        "bandit":              environments.BanditEnvironment,
+        "switching":           environments.SwitchingAdversaryEnvironment,
+        "newcomb":             environments.NewcombEnvironment,
+        "damascus":            environments.DeathInDamascusEnvironment,
+        "asymmetric-damascus": environments.AsymmetricDeathInDamascusEnvironment,
+        "coordination":        environments.CoordinationGameEnvironment,
+        "pdbandit":            environments.PolicyDependentBanditEnvironment,
     }
 
     name, kwargs = parse_argument_string(string)

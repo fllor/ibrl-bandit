@@ -5,7 +5,7 @@ OPTIONS_BASE=--steps 1001 --runs 1000
 OPTIONS_bandit=--arms 10
 ALL=$(foreach env,$(ENVS),$(foreach agent,$(AGENTS),figures/$(env).$(agent).png))
 ALL:=$(filter-out figures/bandit.experimental2.png,$(ALL))
-SOURCES=main.py agents.py environments.py utils.py
+SOURCES=main.py
 
 POLICY_epsilon=epsilon=0.5:0.5:0.01
 POLICY_softmax=temperature=1:0.3:0.05
